@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face Auth — Liveness Demo</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #2f81f7; --ok: #3fb950; --err: #f85149; --warn: #d29922;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f8fa; --panel:#fff; --border:#d0d7de; --text:#1f2328; --muted:#656d76; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+
+  /* Video + ustidagi chizma qatlami bir xil o'lchamda bo'lishi shart */
+  .stage { position: relative; width: 100%; aspect-ratio: 4/3; background: #000;
+           border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .stage video, .stage canvas.overlay {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+  }
+  .stage video { object-fit: cover; transform: scaleX(-1); }  /* selfie ko'rinishi */
+  .stage canvas.overlay { pointer-events: none; }
+
+  input, button {
+    font: inherit; border-radius: 6px; border: 1px solid var(--border);
+    padding: 9px 12px; width: 100%; margin-bottom: 10px;
+  }
+  input { background: var(--bg); color: var(--text); }
+  button {
+    background: var(--accent); color: #fff; border-color: transparent;
+    cursor: pointer; font-weight: 600;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.12); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  .row { display: flex; gap: 10px; }
+  .result { margin-top: 12px; padding: 12px; border-radius: 8px; border-left: 3px solid var(--border);
+            background: rgba(127,127,127,.08); font-size: 14px; }
+  .result.ok   { border-left-color: var(--ok);   }
+  .result.err  { border-left-color: var(--err);  }
+  .result.warn { border-left-color: var(--warn); }
+  .result b { display: block; margin-bottom: 6px; font-size: 15px; }
+  pre { margin: 8px 0 0; font-size: 12px; color: var(--muted); white-space: pre-wrap;
+        word-break: break-all; max-height: 220px; overflow: auto; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* Jonli tiriklik ko'rsatkichi */
+  .live {
+    margin-top: 10px; padding: 9px 12px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--border);
+  }
+  .live::before { content: "●"; font-size: 12px; }
+  .live.idle { color: var(--muted); }
+  .live.checking { color: var(--warn); }
+  .live.real  { color: var(--ok);  background: color-mix(in srgb, #3fb950 12%, transparent); }
+  .live.spoof { color: var(--err); background: color-mix(in srgb, #f85149 12%, transparent); }
+  .bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(127,127,127,.25); overflow: hidden; }
+  .rate { font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums;
+          white-space: nowrap; }
+  .bar > i { display: block; height: 100%; width: 0; background: currentColor; transition: width .2s; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px;
+           color: var(--muted); margin-bottom: 10px; }
+  .check input { width: auto; margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="grid-column: 1/-1">
+    <h1>Yuz orqali autentifikatsiya</h1>
+    <div class="sub">InsightFace (buffalo_l) + MiniFASNet Anti-Spoofing + Qdrant &middot; real-time oqim: WebSocket &rarr; gRPC</div>
+  </div>
+
+  <!--
+    API kalit. Servis YOPIQ: `/health` dan tashqari har bir endpoint kalit
+    talab qiladi, shu jumladan bu sahifadagi barcha amallar.
+
+    Kalit faqat sessionStorage'da saqlanadi — localStorage'da EMAS. Farqi:
+    sessionStorage tab yopilishi bilan o'chadi, ya'ni umumiy kompyuterda
+    keyingi odam uni topmaydi. Bu sahifa faqat ishlab chiqish va tekshirish
+    uchun mo'ljallangan; production'da brauzerga kalit berilmaydi — u
+    server tomonda qoladi (kirdi_chiqdi backendi shunday qiladi).
+  -->
+  <div class="card" style="grid-column: 1/-1">
+    <h2>API kalit</h2>
+    <div class="row">
+      <input id="apiKey" type="password" placeholder="fdsk_..." autocomplete="off"
+             style="flex:1; min-width:260px">
+      <button id="saveKey">Saqlash</button>
+      <button id="clearKey" class="ghost">Tozalash</button>
+    </div>
+    <div id="keyStatus" class="hint">Kalit kiritilmagan — amallar ishlamaydi.</div>
+  </div>
+
+  <div class="card">
+    <h2>Kamera</h2>
+    <div class="stage" id="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay" class="overlay"></canvas>
+    </div>
+    <canvas id="canvas" hidden></canvas>
+    <div id="liveStatus" class="live idle">Kamera o'chiq</div>
+    <div class="row" style="margin-top:10px">
+      <button id="startCam">Kamerani yoqish</button>
+      <button id="stopCam" class="ghost" disabled>To'xtatish</button>
+    </div>
+    <div class="hint">
+      Anti-spoofing testi: telefon ekranidagi rasmni yoki qog'ozga chop etilgan
+      suratni kameraga tuting — ramka qizil bo'lib qolishi va avtomatik
+      tekshiruv ishga tushmasligi kerak.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1 — Ro'yxatdan o'tkazish</h2>
+    <input id="personName" placeholder="Ism Familiya">
+    <button id="btnRegister" disabled>Kadrni olib ro'yxatga qo'shish</button>
+    <div class="hint">Identifikatorni server o'zi beradi (UUID) va javobda qaytaradi.</div>
+    <div id="registerResult"></div>
+
+    <h2 style="margin-top:22px">2 — Autentifikatsiya</h2>
+    <div class="hint" style="margin-top:0;margin-bottom:10px">
+      Kamera yoqilgach oqim avtomatik ishlaydi: tiriklik tasdiqlangach server
+      o'zi to'liq tekshiruvni boshlaydi. Quyidagi tugma faqat qo'lda sinash uchun.
+    </div>
+    <button id="btnVerify" disabled>Hoziroq tekshirish (qo'lda)</button>
+    <div id="verifyResult"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

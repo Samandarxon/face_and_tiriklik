@@ -1,0 +1,197 @@
+name: face-auth
+
+services:
+  # ------------------------------------------------------------ Vektor bazasi
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: face-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"   # REST + Web UI (http://localhost:6333/dashboard)
+      - "${QDRANT_GRPC_PORT:-6334}:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      # DIQQAT: "bare" (qiymatsiz) yozuv ataylab ishlatilgan.
+      # `QDRANT__SERVICE__API_KEY: ${...:-}` deb yozilsa, kalit o'rnatilmaganda
+      # konteynerga BO'SH SATR uzatiladi va Qdrant auth'ni yoqib qo'yadi —
+      # natijada HAR QANDAY so'rov "401 Must provide an API key" bilan rad etiladi.
+      # Bu ko'rinishda esa o'zgaruvchi o'rnatilmagan bo'lsa umuman uzatilmaydi.
+      # Shu sababli .env da bu qatorni BO'SH QOLDIRMANG — izohga oling yoki o'chiring.
+      - QDRANT__SERVICE__API_KEY
+      - QDRANT__LOG_LEVEL=INFO
+    healthcheck:
+      # Qdrant image'ida curl/wget yo'q — o'rnatilgan healthcheck binaridan foydalanamiz.
+      test: ["CMD", "/qdrant/qdrant", "--version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [face-net]
+
+  # ------------------------------------------------- Kirish nazorati bazasi
+  #
+  # Bu Postgres FAQAT mijozlar, API kalitlar va so'rovlar jurnali uchun.
+  # Yuz vektorlari bu yerda emas — ular Qdrant'da. Ikkalasini ajratish
+  # ataylab: biometrik ma'lumot va kirish huquqlari bir-biridan mustaqil
+  # zaxiralanadi va mustaqil o'chiriladi.
+  face-postgres:
+    image: postgres:16-alpine
+    container_name: face-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FACE_POSTGRES_USER:-face}
+      POSTGRES_PASSWORD: ${FACE_POSTGRES_PASSWORD:-***REMOVED***}
+      POSTGRES_DB: ${FACE_POSTGRES_DB:-face_auth}
+    volumes:
+      - face_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FACE_POSTGRES_USER:-face} -d ${FACE_POSTGRES_DB:-face_auth}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [face-net]
+
+  # -------------------------------------------------------- Python AI servisi
+  ai-service:
+    build:
+      context: ./python-ai-service
+      dockerfile: Dockerfile          # GPU uchun: Dockerfile.gpu
+    container_name: face-ai
+    restart: unless-stopped
+    ports:
+      - "${AI_PORT:-8000}:8000"        # HTTP: Swagger (/docs), debug
+      - "${AI_GRPC_PORT:-50051}:50051" # gRPC: Golang backend shu orqali ulanadi
+    environment:
+      DEVICE: ${DEVICE:-auto}                       # auto | cpu | cuda
+      GPU_ID: ${GPU_ID:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      GRPC_ENABLED: "true"
+      GRPC_PORT: 50051
+
+      INSIGHTFACE_MODEL: buffalo_l
+      INSIGHTFACE_ROOT: /models/insightface
+      DET_SIZE: ${DET_SIZE:-640}
+      DET_SCORE_THRESHOLD: ${DET_SCORE_THRESHOLD:-0.60}
+
+      # --- Anti-Spoofing ---
+      LIVENESS_ENABLED: ${LIVENESS_ENABLED:-true}
+      LIVENESS_MODEL_DIR: /app/resources/anti_spoof_models
+      LIVENESS_THRESHOLD: ${LIVENESS_THRESHOLD:-0.75}
+      LIVENESS_REQUIRE_UNANIMOUS: ${LIVENESS_REQUIRE_UNANIMOUS:-true}
+      LIVENESS_FAIL_CLOSED: ${LIVENESS_FAIL_CLOSED:-true}
+
+      # --- Sifat filtri ---
+      MIN_FACE_SIZE: ${MIN_FACE_SIZE:-80}
+      MIN_BLUR_SCORE: ${MIN_BLUR_SCORE:-45}
+      MAX_CONCURRENT_INFERENCE: ${MAX_CONCURRENT_INFERENCE:-4}
+      # Bitta inference uchun ONNX Runtime oqimlari. 0 = avtomatik
+      # (yadrolar / MAX_CONCURRENT_INFERENCE). ORT standarti — barcha
+      # yadro, bu esa parallel so'rovlarda o'tkazuvchanlikni tushiradi.
+      ORT_INTRA_OP_THREADS: ${ORT_INTRA_OP_THREADS:-0}
+    volumes:
+      - insightface_models:/models/insightface
+    networks: [face-net]
+
+    # ---------------------------------------------------------------- GPU
+    # Yoqish uchun UCHTA shart, va uchalasi ham bajarilishi kerak:
+    #
+    #  1. Hostda nvidia-container-toolkit o'rnatilgan bo'lsin:
+    #        sudo apt install -y nvidia-container-toolkit
+    #        sudo nvidia-ctk runtime configure --runtime=docker
+    #        sudo systemctl restart docker
+    #     Tekshirish:
+    #        docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu22.04 nvidia-smi
+    #
+    #  2. Dockerfile.gpu ishlatilsin (requirements-gpu.txt bilan):
+    #        build: { context: ./python-ai-service, dockerfile: Dockerfile.gpu }
+    #
+    #  3. requirements-gpu.txt dagi versiyalar SIZNING GPU arxitekturangizga
+    #     mos bo'lsin. Tekshirish:
+    #        nvidia-smi --query-gpu=name,compute_cap --format=csv
+    #     Mos kelmasa servis ishga tushadi, lekin birinchi so'rovda yiqiladi.
+    #     Kod buni oldindan aniqlaydi va CPU'ga o'tadi — logda ogohlantirish
+    #     chiqadi, ya'ni jimgina sekin ishlab ketmaysiz.
+    #
+    # Keyin quyidagi blokni oching:
+    #
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ------------------------------------------------------- Golang API Gateway
+  backend:
+    build:
+      context: ./golang-backend
+    container_name: face-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      GIN_MODE: ${GIN_MODE:-release}
+
+      # gRPC manzili (sxemasiz "host:port").
+      AI_SERVICE_TARGET: ai-service:50051
+      AI_TIMEOUT: ${AI_TIMEOUT:-30s}
+
+      QDRANT_URL: http://qdrant:6333
+      # Qdrant bilan bir manbadan olinadi — ikkalasi doim mos bo'lishi uchun.
+      # Backend uchun bo'sh qiymat xavfsiz: shunda `api-key` sarlavhasi yuborilmaydi.
+      QDRANT_API_KEY: ${QDRANT__SERVICE__API_KEY:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-faces}
+      VECTOR_SIZE: 512
+      QDRANT_TIMEOUT: ${QDRANT_TIMEOUT:-15s}
+
+      MATCH_THRESHOLD: ${MATCH_THRESHOLD:-0.65}
+      # 1:1 tasdiqlash uchun alohida chegara. Bo'sh qoldirilsa servis uni
+      # MATCH_THRESHOLD dan 0.10 past qilib oladi — sababi `.env.example` da.
+      CONFIRM_THRESHOLD: ${CONFIRM_THRESHOLD:-0}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-*}
+
+      # --- Kirish nazorati ---
+      POSTGRES_HOST: face-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${FACE_POSTGRES_USER:-face}
+      POSTGRES_PASSWORD: ${FACE_POSTGRES_PASSWORD:-***REMOVED***}
+      POSTGRES_DB: ${FACE_POSTGRES_DB:-face_auth}
+
+      # MAJBURIY. Yasash: make secrets  (yoki: openssl rand -base64 48)
+      #
+      # Bu yerda `:?` (majburiy o'zgaruvchi) sintaksisi ATAYLAB ishlatilmaydi:
+      # u `docker compose down`, `ps` va `logs` ni ham bloklab qo'yadi, ya'ni
+      # bo'sh sozlama bilan konteynerlarni to'xtatib ham bo'lmaydi. Tekshiruv
+      # servisning o'zida (`internal/config`) — u aniq xato bilan to'xtaydi.
+      #
+      # DIQQAT: o'zgartirilsa barcha person_id lar kuchini yo'qotadi va
+      # bazadagi yozuvlarni qayta ro'yxatdan o'tkazish kerak bo'ladi.
+      SUBJECT_ID_STRICT_PNFL: ${SUBJECT_ID_STRICT_PNFL:-true}
+      # Birinchi kalitni olish uchun. Kalit yaratilgach bu qatorni O'CHIRING.
+      ADMIN_BOOTSTRAP_KEY: ${ADMIN_BOOTSTRAP_KEY:-}
+      AUTH_CACHE_TTL: ${AUTH_CACHE_TTL:-30s}
+      DEFAULT_RATE_LIMIT_PER_MIN: ${DEFAULT_RATE_LIMIT_PER_MIN:-600}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      face-postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    networks: [face-net]
+
+volumes:
+  qdrant_data:
+  insightface_models:
+  face_pgdata:
+
+networks:
+  face-net:
+    driver: bridge

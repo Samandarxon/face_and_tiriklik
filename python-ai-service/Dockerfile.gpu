@@ -1,0 +1,55 @@
+# NVIDIA GPU build.
+#
+# Talab: hostda NVIDIA drayver + nvidia-container-toolkit.
+#
+# ---------------------------------------------------------------------------
+#  BAZA OBRAZ GPU ARXITEKTURASIGA MOS BO'LISHI KERAK
+# ---------------------------------------------------------------------------
+#  Blackwell (RTX 50xx, sm_120)  →  CUDA 12.8+   ← quyida shu
+#  Ada / Ampere / Turing         →  CUDA 12.1 ham yetadi
+#
+#  CUDA 12.1 obrazi Blackwell kartada ishga TUSHADI, lekin birinchi
+#  inference'da yiqiladi. Bu jimgina nosozlik, shuning uchun baza obraz
+#  requirements-gpu.txt dagi torch/ORT versiyalari bilan birga tanlanadi.
+#
+#  Tekshirish:  nvidia-smi --query-gpu=name,compute_cap --format=csv
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+
+# Eski kartalar uchun (RTX 20-40) yuqoridagini izohga olib, buni oching:
+# FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    DEVICE=auto \
+    INSIGHTFACE_ROOT=/models/insightface \
+    LIVENESS_MODEL_DIR=/app/resources/anti_spoof_models
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3-pip \
+        build-essential cmake curl libgl1 libglib2.0-0 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements-gpu.txt .
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install "numpy==1.26.4" "cython" \
+    && pip install -r requirements-gpu.txt
+
+COPY . .
+
+RUN bash scripts/download_models.sh "$LIVENESS_MODEL_DIR"
+RUN python -c "\
+from insightface.app import FaceAnalysis; \
+app = FaceAnalysis(name='buffalo_l', root='/models/insightface', \
+                   allowed_modules=['detection','recognition']); \
+app.prepare(ctx_id=-1, det_size=(640,640)); \
+print('buffalo_l tayyor')"
+
+EXPOSE 8000 50051
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

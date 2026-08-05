@@ -1,0 +1,28 @@
+# --- Web qatlami ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+pydantic==2.10.4
+
+# --- gRPC (Golang backend shu orqali ulanadi) ---
+grpcio==1.68.1
+grpcio-status==1.68.1          # boy xato detallari (google.rpc.Status)
+grpcio-reflection==1.68.1      # grpcurl / Postman proto'siz ishlashi uchun
+protobuf==5.29.2
+googleapis-common-protos==1.66.0
+
+# --- Kompyuter ko'rish ---
+# insightface 0.7.3 numpy 2.x bilan mos emas — 1.x da qoldiramiz.
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+scikit-image==0.24.0
+Pillow==11.0.0
+
+# --- Yuzni aniqlash / tanish ---
+insightface==0.7.3
+onnxruntime==1.19.2          # CPU. GPU uchun: requirements-gpu.txt
+
+# --- Anti-Spoofing (MiniFASNet) ---
+# CPU wheel. GPU uchun requirements-gpu.txt ga qarang.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1

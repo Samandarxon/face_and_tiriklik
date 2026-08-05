@@ -1,0 +1,597 @@
+basePath: /api/v1
+definitions:
+  github_com_face_detecting_microservice_golang-backend_internal_domain.Code:
+    enum:
+    - invalid_request
+    - no_face_detected
+    - multiple_faces
+    - low_quality_face
+    - spoof_detected
+    - person_not_found
+    - ai_service_unavailable
+    - vector_db_error
+    - internal_error
+    - unauthenticated
+    - forbidden
+    - rate_limited
+    - not_found
+    - already_exists
+    - auth_store_error
+    type: string
+    x-enum-varnames:
+    - CodeInvalidInput
+    - CodeNoFaceDetected
+    - CodeMultipleFaces
+    - CodeLowQualityFace
+    - CodeSpoofDetected
+    - CodePersonNotFound
+    - CodeAIUnavailable
+    - CodeVectorDBFailure
+    - CodeInternal
+    - CodeUnauthenticated
+    - CodeForbidden
+    - CodeRateLimited
+    - CodeNotFound
+    - CodeConflict
+    - CodeStoreFailure
+  github_com_face_detecting_microservice_golang-backend_internal_domain.Liveness:
+    properties:
+      is_real:
+        type: boolean
+      per_model:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      real_probability:
+        type: number
+      spoof_probability:
+        type: number
+      threshold:
+        type: number
+    type: object
+  internal_delivery_httpapi.clientRequest:
+    properties:
+      contact:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+    type: object
+  internal_delivery_httpapi.errorBody:
+    properties:
+      code:
+        $ref: '#/definitions/github_com_face_detecting_microservice_golang-backend_internal_domain.Code'
+      details:
+        additionalProperties: {}
+        type: object
+      liveness:
+        $ref: '#/definitions/github_com_face_detecting_microservice_golang-backend_internal_domain.Liveness'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  internal_delivery_httpapi.issueKeyRequest:
+    properties:
+      client_id:
+        type: string
+      expires_in_days:
+        type: integer
+      label:
+        type: string
+      rate_limit_per_min:
+        type: integer
+      scopes:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_delivery_httpapi.resolveRequest:
+    properties:
+      subject_id:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Anti-spoofing himoyasiga ega yuz orqali autentifikatsiya servisi.
+
+    Servis YOPIQ: `/health` dan tashqari har bir endpoint API kalit talab qiladi.
+    Kalitlar mijozlarga (platformalarga) beriladi va scope'lar bilan cheklanadi:
+    `face:verify`, `face:register`, `face:read`, `face:delete`, `admin:keys`.
+
+    Shaxsiy ma'lumot saqlanmaydi: `subject_id` (masalan PNFL) maxfiy kalit bilan
+    HMAC-SHA256 orqali qaytarilmas `person_id` ga aylantiriladi va faqat shu saqlanadi.
+  title: Face Authentication API
+  version: "2.0"
+paths:
+  /admin/audit:
+    get:
+      parameters:
+      - description: Mijoz bo'yicha filtr
+        in: query
+        name: client_id
+        type: string
+      - description: Nechta yozuv (standart 100, maksimum 500)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: So'rovlar jurnali
+      tags:
+      - admin
+  /admin/clients:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Mijozlar ro'yxati
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Servisdan foydalanadigan tashqi platformani ro'yxatga oladi. Kalit
+        keyin shu mijozga beriladi.
+      parameters:
+      - description: Mijoz ma'lumotlari
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_delivery_httpapi.clientRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: Yangi mijoz (platforma) qo'shish
+      tags:
+      - admin
+  /admin/clients/{client_id}:
+    delete:
+      description: Mijoz bilan birga uning barcha kalitlari ham o'chadi. Audit jurnali
+        saqlanib qoladi.
+      parameters:
+      - description: Mijoz ID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Mijozni o'chirish
+      tags:
+      - admin
+    get:
+      parameters:
+      - description: Mijoz ID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Bitta mijoz
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Mijoz ID
+        in: path
+        name: client_id
+        required: true
+        type: string
+      - description: Yangi qiymatlar
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_delivery_httpapi.clientRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Mijozni yangilash yoki faolsizlantirish
+      tags:
+      - admin
+  /admin/keys:
+    get:
+      parameters:
+      - description: Faqat shu mijozning kalitlari
+        in: query
+        name: client_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Kalitlar ro'yxati (ochiq matnsiz)
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Kalitning ochiq matni FAQAT shu javobda qaytariladi va boshqa hech
+        qayerda saqlanmaydi. Uni yo'qotsangiz — rotatsiya qiling.
+      parameters:
+      - description: Kalit parametrlari
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_delivery_httpapi.issueKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: Yangi API kalit berish
+      tags:
+      - admin
+  /admin/keys/{key_id}:
+    delete:
+      parameters:
+      - description: Kalit ID
+        in: path
+        name: key_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Kalitni bekor qilish
+      tags:
+      - admin
+  /admin/keys/{key_id}/rotate:
+    post:
+      description: Eski kalit bekor qilinadi, aynan shu huquqlar bilan yangisi beriladi.
+      parameters:
+      - description: Kalit ID
+        in: path
+        name: key_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Kalitni almashtirish
+      tags:
+      - admin
+  /admin/scopes:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Mavjud scope'lar ro'yxati
+      tags:
+      - admin
+  /health:
+    get:
+      description: Orkestrator (Docker/Kubernetes) uchun. Kalit talab qilinmaydi.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Yengil holat tekshiruvi
+      tags:
+      - health
+  /health/ready:
+    get:
+      description: AI servis, Qdrant va Postgres holatini tekshiradi. Bittasi ishlamasa
+        `503` qaytadi.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      summary: To'liq tayyorlik tekshiruvi
+      tags:
+      - health
+  /persons/{person_id}:
+    delete:
+      parameters:
+      - description: person_id
+        in: path
+        name: person_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: Yozuvni bazadan o'chirish
+      tags:
+      - persons
+    get:
+      parameters:
+      - description: person_id
+        in: path
+        name: person_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: person_id bo'yicha yozuvni olish
+      tags:
+      - persons
+  /persons/register:
+    post:
+      consumes:
+      - multipart/form-data
+      description: '`subject_id` (masalan PNFL) yuborilsa, servis uni HMAC orqali
+        qaytarilmas `person_id` ga o''giradi va XOM QIYMATNI SAQLAMAYDI. Muqobil:
+        tayyor `person_id` yuborish yoki ikkalasini ham qoldirmaslik (tasodifiy ID
+        beriladi).'
+      parameters:
+      - description: Yuz tasviri
+        in: formData
+        name: image
+        required: true
+        type: file
+      - description: Tashqi identifikator (PNFL va h.k.)
+        in: formData
+        name: subject_id
+        type: string
+      - description: Tayyor person_id
+        in: formData
+        name: person_id
+        type: string
+      - description: Ixtiyoriy yorliq
+        in: formData
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: Yuzni bazaga qo'shish
+      tags:
+      - persons
+  /persons/resolve:
+    post:
+      consumes:
+      - application/json
+      description: 'Yuz orqali tanish ishlamagan holatlar uchun zaxira yo''l: operator
+        PNFL kiritadi, mijoz shu yerdan `person_id` ni oladi va o''z bazasidan yozuvni
+        topadi. Hisoblash deterministik — bir xil `subject_id` doim bir xil `person_id`
+        beradi.'
+      parameters:
+      - description: Tashqi identifikator
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_delivery_httpapi.resolveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: subject_id dan person_id ni hisoblash (rasmsiz)
+      tags:
+      - persons
+  /persons/verify:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Avval anti-spoofing, keyin vektor qidiruvi. Kadr soxta bo'lsa bazaga
+        so'rov UMUMAN yuborilmaydi va `400 spoof_detected` qaytadi.
+      parameters:
+      - description: Kamera kadri
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: spoof_detected
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+        "404":
+          description: person_not_found
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+        "422":
+          description: no_face_detected / low_quality_face
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: Yuz orqali tanish
+      tags:
+      - persons
+  /stream/tickets:
+    post:
+      description: 'Brauzer WS ulanishida sarlavha yubora olmaydi. Server tarafi shu
+        endpointdan ticket olib, uni brauzerga beradi: `wss://.../api/v1/stream?ticket=...`.
+        Ticket 60 soniya yashaydi va bir marta ishlatiladi.'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_delivery_httpapi.errorBody'
+      security:
+      - ApiKeyAuth: []
+      summary: WebSocket uchun bir martalik ticket olish
+      tags:
+      - stream
+securityDefinitions:
+  ApiKeyAuth:
+    description: 'Mijozga berilgan kalit: `fdsk_<prefix>_<sir>`'
+    in: header
+    name: X-API-Key
+    type: apiKey
+swagger: "2.0"

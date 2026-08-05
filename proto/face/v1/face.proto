@@ -1,0 +1,181 @@
+// Golang backend va Python AI servisi o'rtasidagi shartnoma.
+//
+// Dizayn qarorlari:
+//   1. Rasm `bytes` sifatida uzatiladi — base64 kodlash yo'q, multipart yo'q.
+//   2. Biznes xatolari (soxta yuz, yuz topilmadi, ...) gRPC status kodlari
+//      orqali emas, `FaceError` detali bilan uzatiladi. Sabab: `spoof_detected`
+//      bilan birga liveness ballari ham kerak, ular tuzilmaviy bo'lishi shart.
+//   3. Streaming rejimida esa xatolar IN-BAND (`FrameResponse.error`) keladi —
+//      bitta soxta kadr butun oqimni uzib qo'ymasligi kerak.
+syntax = "proto3";
+
+package face.v1;
+
+option go_package = "github.com/face_detecting_microservice/golang-backend/genproto/face/v1;facev1";
+
+// ============================================================ umumiy tuzilmalar
+
+// Xatoning barqaror kodi. Mijoz shu qiymatga tayanadi, matnga emas.
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_INVALID_IMAGE = 1;         // rasmni dekodlab bo'lmadi
+  ERROR_CODE_NO_FACE_DETECTED = 2;      // kadrda yuz yo'q
+  ERROR_CODE_MULTIPLE_FACES = 3;        // kadrda bir nechta yuz
+  ERROR_CODE_LOW_QUALITY_FACE = 4;      // yuz juda kichik yoki rasm xira
+  ERROR_CODE_SPOOF_DETECTED = 5;        // ★ tirik inson emas
+  ERROR_CODE_LIVENESS_UNAVAILABLE = 6;  // anti-spoofing modeli yuklanmagan
+  ERROR_CODE_MODEL_NOT_READY = 7;       // servis hali tayyor emas
+  ERROR_CODE_INTERNAL = 8;
+}
+
+// Biznes xatosi. Unary chaqiruvlarda gRPC status detali sifatida,
+// streamingda esa `FrameResponse.error` maydonida keladi.
+message FaceError {
+  ErrorCode code = 1;
+  string message = 2;
+  // Xato kontekstga bog'liq qo'shimcha ma'lumot (masalan topilgan yuzlar soni).
+  map<string, string> details = 3;
+  // `code == ERROR_CODE_SPOOF_DETECTED` bo'lganda to'ldiriladi.
+  Liveness liveness = 4;
+}
+
+// Yuz koordinatalari (piksel, chap-yuqori boshlang'ich).
+message BoundingBox {
+  int32 x1 = 1;
+  int32 y1 = 2;
+  int32 x2 = 3;
+  int32 y2 = 4;
+}
+
+// Anti-spoofing natijasi.
+message Liveness {
+  bool is_real = 1;
+  float real_probability = 2;
+  float spoof_probability = 3;
+  float threshold = 4;
+  // Ansambldagi har bir modelning alohida bahosi (fayl nomi -> ehtimol).
+  map<string, float> per_model = 5;
+}
+
+// Boshning fazodagi burilishi (gradusda).
+//
+// Aktiv liveness uchun kerak: server "chapga qarang" deb buyuradi va javobni
+// aynan shu qiymatlar orqali tekshiradi. Passiv anti-spoofing (MiniFASNet)
+// bosma surat va ekranni to'sadi, lekin oldindan YOZILGAN videoni emas —
+// buyruq esa har safar tasodifiy bo'lgani uchun yozib qo'yib bo'lmaydi.
+message HeadPose {
+  // Yaw: gorizontal burilish. Manfiy = chapga, musbat = o'ngga (kameradan
+  // qaraganda). Yagona ishonchli o'lchov shu — 5 nuqtadan pitch va roll
+  // ancha noaniq chiqadi.
+  float yaw = 1;
+  float pitch = 2;
+  float roll = 3;
+  // Available false bo'lsa qolgan maydonlar ma'nosiz: detektor kalit
+  // nuqtalarni bermagan. Bunday kadrni aktiv tekshiruvda ishlatib bo'lmaydi.
+  bool available = 4;
+}
+
+// Aniqlangan yuz haqidagi umumiy ma'lumot.
+message FaceInfo {
+  BoundingBox bbox = 1;
+  float det_score = 2;
+  // 3-maydon KEYIN qo'shilgan: protobuf'da yangi maydon qo'shish orqaga mos,
+  // eski mijoz uni shunchaki e'tiborsiz qoldiradi.
+  HeadPose pose = 3;
+}
+
+// ================================================================== so'rovlar
+
+message ImageRequest {
+  bytes image = 1;        // JPEG / PNG / WEBP baytlari
+  string request_id = 2;  // kuzatuv uchun (loglarda ko'rinadi)
+}
+
+message EmbedResponse {
+  repeated float embedding = 1;  // 512 o'lchamli, L2-normalizatsiyalangan
+  int32 embedding_dim = 2;
+  FaceInfo face = 3;
+}
+
+message VerifyFrameResponse {
+  repeated float embedding = 1;
+  int32 embedding_dim = 2;
+  FaceInfo face = 3;
+  Liveness liveness = 4;  // STEP 1 natijasi (doim to'ldiriladi)
+}
+
+message LivenessResponse {
+  FaceInfo face = 1;
+  Liveness liveness = 2;
+}
+
+// ================================================================= streaming
+
+// Oqimda har bir kadr uchun nima hisoblanishi kerakligini bildiradi.
+enum StreamMode {
+  STREAM_MODE_UNSPECIFIED = 0;
+  // Faqat anti-spoofing. Tez — real-time ko'rsatkich uchun.
+  STREAM_MODE_LIVENESS_ONLY = 1;
+  // Liveness + embedding. Tiriklik tasdiqlangach chaqiriladi.
+  STREAM_MODE_FULL = 2;
+}
+
+message FrameRequest {
+  bytes image = 1;
+  uint64 frame_id = 2;  // javobni so'rov bilan bog'lash uchun
+  StreamMode mode = 3;
+  string request_id = 4;
+}
+
+message FrameResponse {
+  uint64 frame_id = 1;
+  // Kadr muvaffaqiyatli qayta ishlanganini bildiradi. `false` bo'lsa `error`
+  // to'ldiriladi, lekin OQIM DAVOM ETADI — mijoz keyingi kadrni yuboraveradi.
+  bool ok = 2;
+  FaceError error = 3;
+
+  FaceInfo face = 4;
+  Liveness liveness = 5;
+  // Faqat `mode == STREAM_MODE_FULL` va `ok == true` bo'lganda to'ldiriladi.
+  repeated float embedding = 6;
+  int32 embedding_dim = 7;
+  // Serverdagi qayta ishlash vaqti — mijoz kadr tezligini moslashtirishi uchun.
+  int32 processing_ms = 8;
+}
+
+// =================================================================== xizmat
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ready = 1;
+  string device = 2;                  // "cpu" yoki "cuda:0"
+  string insightface_model = 3;
+  int32 embedding_dim = 4;
+  bool liveness_enabled = 5;
+  bool liveness_loaded = 6;
+  repeated string liveness_models = 7;
+  float liveness_threshold = 8;
+  bool liveness_require_unanimous = 9;
+  string liveness_error = 10;         // bo'sh bo'lmasa — muammo bor
+}
+
+service FaceService {
+  // REGISTER oqimi: liveness'siz, faqat vektor.
+  rpc Embed(ImageRequest) returns (EmbedResponse);
+
+  // VERIFY oqimi: STEP 1 liveness -> STEP 2 embedding.
+  // Kadr soxta bo'lsa `ERROR_CODE_SPOOF_DETECTED` qaytadi va embedding
+  // UMUMAN hisoblanmaydi.
+  rpc VerifyFrame(ImageRequest) returns (VerifyFrameResponse);
+
+  // Faqat anti-spoofing (probe).
+  rpc CheckLiveness(ImageRequest) returns (LivenessResponse);
+
+  // ★ Ikki tomonlama oqim: mijoz kadrlarni uzluksiz yuboradi, server har biri
+  // uchun natija qaytaradi. Ulanish bir marta o'rnatiladi — har kadrda yangi
+  // TCP/TLS handshake bo'lmaydi, shuning uchun real-time uchun mos.
+  rpc StreamFrames(stream FrameRequest) returns (stream FrameResponse);
+
+  rpc Health(HealthRequest) returns (HealthResponse);
+}

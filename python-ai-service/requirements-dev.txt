@@ -1,0 +1,35 @@
+# Faqat KOD GENERATSIYASI va OFFLINE O'LCHOV uchun.
+# Runtime'da kerak emas — Docker image'ga KIRMAYDI.
+#
+#   pip install -r requirements-dev.txt
+#   bash ../scripts/gen-proto.sh
+#
+# ⚠️  VERSIYA MUHIM: `grpcio-tools` generatsiya qilgan kod ichiga o'zining
+#     protobuf gencode versiyasini yozib qo'yadi va runtime uni tekshiradi.
+#     Gencode runtime'dan YANGI bo'lsa servis ishga tushmaydi:
+#
+#       ValidateProtobufRuntimeVersion -> "Detected incompatible Protobuf
+#       Gencode/Runtime versions"
+#
+#     Shuning uchun bu versiya `requirements.txt` dagi grpcio/protobuf
+#     pinlariga MOS bo'lishi shart. Ikkalasini birga o'zgartiring.
+grpcio-tools==1.68.1
+
+# --- Optimizatsiya vositalari (scripts/README_optimizatsiya.md) ---
+#
+# Bular ATAYLAB `requirements.txt` ga qo'shilmagan: eksport, kvantlash va
+# aniqlik o'lchash bir martalik OFFLINE ishlar. Ularni production image'ga
+# qo'shish image hajmini bekorga oshiradi.
+#
+# `onnx` kerak:
+#   - scripts/export_onnx.py      -> torch.onnx.export natijasini o'qish
+#   - scripts/quantize_int8.py    -> onnxruntime.quantization uni talab qiladi
+#   - scripts/accuracy_check.py   -> insightface'ning ArcFaceONNX'i model
+#                                    grafigini `onnx.load` bilan o'qiydi
+# Versiya `requirements.txt` dagi protobuf==5.29.2 va numpy==1.26.4 ga mos.
+onnx==1.17.0
+
+# `psutil` — scripts/benchmark.py da RSS (xotira) o'lchash uchun.
+# Ixtiyoriy: bo'lmasa benchmark /proc/self/statm ga qaytadi, lekin
+# psutil bilan raqamlar aniqroq.
+psutil==6.1.0

@@ -1,0 +1,58 @@
+# NVIDIA GPU uchun. requirements.txt O'RNIGA ishlatiladi.
+#   pip install -r requirements-gpu.txt
+#
+# ============================================================================
+#  ARXITEKTURA MOSLIGI — buni tekshirmasdan o'rnatmang
+# ============================================================================
+#
+# GPU "bor" bo'lishi yetarli emas: paket ANIQ shu GPU arxitekturasi uchun
+# kompilyatsiya qilingan bo'lishi kerak. Aks holda torch qurilmani KO'RADI,
+# `cuda.is_available()` True qaytaradi, va model faqat birinchi inference'da
+# yiqiladi:  "no kernel image is available for execution on the device".
+#
+# Bu eng yomon nosozlik turi: ishga tushish muvaffaqiyatli, xato esa
+# birinchi haqiqiy so'rovda chiqadi.
+#
+#   GPU avlodi        compute cap   Kerak
+#   ─────────────────────────────────────────────────────────────
+#   Turing  (RTX 20)    sm_75       torch cu118+, ORT-GPU 1.16+
+#   Ampere  (RTX 30)    sm_86       torch cu118+, ORT-GPU 1.16+
+#   Ada     (RTX 40)    sm_89       torch cu121+, ORT-GPU 1.17+
+#   Hopper  (H100)      sm_90       torch cu121+, ORT-GPU 1.17+
+#   BLACKWELL (RTX 50)  sm_120      torch cu128 (>=2.7), ORT-GPU >=1.21
+#
+# O'z kartangizni tekshiring:
+#   nvidia-smi --query-gpu=name,compute_cap --format=csv
+#
+# Quyidagi versiyalar BLACKWELL (sm_120) uchun. Eski karta bo'lsa pastdagi
+# izohlangan qatorlarga o'ting.
+# ============================================================================
+
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+pydantic==2.10.4
+
+# --- gRPC (Golang backend shu orqali ulanadi) ---
+grpcio==1.68.1
+grpcio-status==1.68.1          # boy xato detallari (google.rpc.Status)
+grpcio-reflection==1.68.1      # grpcurl / Postman proto'siz ishlashi uchun
+protobuf==5.29.2
+googleapis-common-protos==1.66.0
+
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+scikit-image==0.24.0
+Pillow==11.0.0
+
+insightface==0.7.3
+
+# --- Blackwell (RTX 50xx, sm_120) ---
+onnxruntime-gpu>=1.21.0
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch>=2.7.0
+
+# --- Ada / Ampere / Turing (RTX 20-40) — yuqoridagini izohga oling ---
+# onnxruntime-gpu==1.19.2
+# --extra-index-url https://download.pytorch.org/whl/cu121
+# torch==2.4.1

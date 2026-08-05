@@ -1,0 +1,48 @@
+[Unit]
+Description=Face AI Service (Python, InsightFace + MiniFASNet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=face
+Group=face
+
+WorkingDirectory=/opt/face/app/python-ai-service
+EnvironmentFile=/etc/face/ai-service.env
+
+# ProtectHome=true bilan /home ko'rinmaydi, ProtectSystem=strict bilan esa /opt
+# faqat o'qish uchun. torch/insightface standart holatda $HOME/.cache ga yozishga
+# urinadi va bu yerda yiqiladi — shuning uchun keshni ochiq papkaga yo'naltiramiz.
+Environment=HOME=/opt/face
+Environment=XDG_CACHE_HOME=/opt/face/.cache
+Environment=MPLCONFIGDIR=/opt/face/.cache/matplotlib
+# Kod papkasi faqat o'qish uchun — .pyc yozishga urinmasin.
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+
+# main.py ichida lifespan gRPC serverni ham ko'taradi — bitta jarayonda
+# HTTP :8000 va gRPC :50051 birga ishlaydi. --workers 1 SHART: modellar
+# xotiraga bir marta yuklanadi, ko'p worker RAM ni bir necha barobar yeydi.
+ExecStart=/opt/face/venv/bin/uvicorn main:app --host ${AI_HOST} --port ${AI_PORT} --workers 1
+
+# Birinchi ishga tushishda buffalo_l + anti-spoofing vaznlari xotiraga
+# yuklanadi — sekin serverda 1-2 daqiqa ketishi mumkin.
+TimeoutStartSec=300
+Restart=always
+RestartSec=5
+
+# --- Himoya ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/face/models /opt/face/.cache /var/log/face
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=face-ai
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+[Unit]
+Description=Face Backend (Go, Gin + Qdrant + gRPC)
+After=network-online.target postgresql.service qdrant.service face-ai.service
+Wants=network-online.target
+Requires=qdrant.service face-ai.service
+
+[Service]
+Type=simple
+User=face
+Group=face
+
+# WEB_DIR standart qiymati "./web" — shu papkaga nisbatan hisoblanadi.
+WorkingDirectory=/opt/face/app/golang-backend
+EnvironmentFile=/etc/face/face-backend.env
+ExecStart=/opt/face/bin/face-backend
+
+# Ishga tushganda Postgres migratsiyalarini qo'llaydi va Qdrant kolleksiyasini
+# yaratadi — Qdrant hali ko'tarilmagan bo'lsa qayta uriniladi.
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+# --- Himoya ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/log/face
+
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=face-backend
+
+[Install]
+WantedBy=multi-user.target

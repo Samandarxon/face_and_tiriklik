@@ -1,0 +1,14 @@
+.env
+*.pth
+python-ai-service/resources/anti_spoof_models/
+python-ai-service/__pycache__/
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+golang-backend/server
+golang-backend/bin/
+qdrant_storage/
+.DS_Store
+python-ai-service/scripts/.samples/
+*.zip

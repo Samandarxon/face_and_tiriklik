@@ -1,0 +1,37 @@
+[Unit]
+Description=Qdrant vector database (face auth)
+Documentation=https://qdrant.tech/documentation/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=face
+Group=face
+
+# Qdrant konfiguratsiyani ish papkasidagi config/config.yaml dan o'qiydi.
+WorkingDirectory=/opt/qdrant
+EnvironmentFile=/etc/face/qdrant.env
+ExecStart=/opt/qdrant/qdrant
+
+Restart=always
+RestartSec=3
+TimeoutStartSec=60
+
+# --- Himoya ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/qdrant
+
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qdrant
+
+[Install]
+WantedBy=multi-user.target
