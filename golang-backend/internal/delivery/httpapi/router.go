@@ -203,16 +203,39 @@ func recoveryMiddleware(log *slog.Logger) gin.HandlerFunc {
 }
 
 // corsMiddleware — demo interfeys va tashqi frontend uchun.
-// PRODUCTION: `*` o'rniga aniq domenlarni ko'rsating.
+//
+// PRODUCTION: `CORS_ALLOW_ORIGIN=none`. Servisga faqat boshqa backend
+// murojaat qilsa, brauzerga umuman ruxsat bermaslik kerak — qabul qilinadigan
+// qiymatlar `originPolicy` da tavsiflangan.
+//
+// Diqqat: `Access-Control-Allow-Headers` ro'yxatida `X-API-Key` ATAYLAB yo'q.
+// Brauzer API kalitni yubora olmaydi degani, ya'ni kalit hech qachon front
+// kodiga tushmasligi kerak. Bu ro'yxatga X-API-Key qo'shish — kalitni
+// brauzerga chiqarishga ruxsat berish bilan barobar.
 func corsMiddleware(allowed string) gin.HandlerFunc {
-	if allowed == "" {
-		allowed = "*"
-	}
+	policy := newOriginPolicy(allowed)
+
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", allowed)
-		c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, X-Request-ID")
+		origin := c.Request.Header.Get("Origin")
+
+		// Javob origin'ga qarab farq qiladi, ya'ni keshlar uni ajratib
+		// saqlashi shart. Vary bo'lmasa, bitta sahifaga berilgan ruxsat
+		// oradagi keshdan boshqasiga ham tarqaladi.
+		if !policy.allowAll {
+			c.Header("Vary", "Origin")
+		}
+
+		if value := policy.header(origin); value != "" {
+			c.Header("Access-Control-Allow-Origin", value)
+			c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, X-Request-ID")
+		}
+
 		if c.Request.Method == http.MethodOptions {
+			// Ruxsat berilmagan origin uchun ham 204 qaytadi, lekin ruxsat
+			// sarlavhalarisiz — brauzer asosiy so'rovni o'zi to'sadi. Bu
+			// yerda 403 berish hech narsani himoya qilmaydi, faqat sabab
+			// izlashni qiyinlashtiradi.
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}

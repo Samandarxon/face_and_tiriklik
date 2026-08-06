@@ -908,7 +908,8 @@ ular ataylab kiritilmagan, chunki har bir tashkilotda boshqacha hal qilinadi:
       API-key yoki JWT middleware qo'shing.
 - [ ] **Rate limiting.** `/verify` — brute-force uchun jozibador nishon.
 - [ ] **TLS.** Kamera oqimi va biometrik ma'lumot faqat HTTPS orqali.
-- [ ] **`CORS_ALLOW_ORIGIN`** — `*` o'rniga aniq domen.
+- [ ] **`CORS_ALLOW_ORIGIN`** — `*` o'rniga `none` (server-server integratsiya)
+      yoki aniq domen (brauzer to'g'ridan-to'g'ri ulansa).
 - [ ] **`QDRANT_API_KEY`** — hozir bo'sh; production'da to'ldiring va
       6333/6334 portlarini tashqariga ochmang.
 - [ ] **Audit log.** Kim, qachon, qaysi score bilan tanildi — alohida jurnalga.

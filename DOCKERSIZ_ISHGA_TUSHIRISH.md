@@ -518,7 +518,8 @@ sudo journalctl -u face-backend -n 100 --no-pager
 
 - [ ] `FACE_ID_PEPPER` ning zaxira nusxasi parollar menejerida
 - [ ] `ADMIN_BOOTSTRAP_KEY` bo'sh (bootstrap'dan keyin avtomatik o'chadi)
-- [ ] `CORS_ALLOW_ORIGIN` — `*` emas, aniq domen
+- [ ] `CORS_ALLOW_ORIGIN` — `*` emas. Servisga faqat boshqa backend murojaat
+      qilsa `none`; brauzer to'g'ridan-to'g'ri ulansagina aniq domen
 - [ ] `LIVENESS_FAIL_CLOSED=true`
 - [ ] `SWAGGER_ENABLED=false` (tashqi tarmoqqa ochiq bo'lsa)
 - [ ] Qdrant `127.0.0.1` da; tashqariga chiqarilsa `QDRANT__SERVICE__API_KEY` yoqilgan

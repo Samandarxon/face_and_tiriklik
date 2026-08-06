@@ -72,6 +72,8 @@ func NewStreamHandler(
 	log *slog.Logger,
 	challenges *usecase.ChallengeStore,
 ) *StreamHandler {
+	policy := newOriginPolicy(allowedOrigin)
+
 	return &StreamHandler{
 		analyzer:   analyzer,
 		verifier:   verifier,
@@ -84,11 +86,14 @@ func NewStreamHandler(
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
+			// Oqimning asosiy mijozi — chaqiruvchi backendning proxysi, u esa
+			// Origin yubormaydi. Shuning uchun bu yerda `allowsNonBrowser`:
+			// Origin bo'lmasa o'tkaziladi, bo'lsa ro'yxat bo'yicha
+			// tekshiriladi. Qat'iy tenglik bilan solishtirish
+			// CORS_ALLOW_ORIGIN ga aniq domen yozilishi bilan proxyni uzib
+			// qo'yardi.
 			CheckOrigin: func(r *http.Request) bool {
-				if allowedOrigin == "" || allowedOrigin == "*" {
-					return true
-				}
-				return r.Header.Get("Origin") == allowedOrigin
+				return policy.allowsNonBrowser(r.Header.Get("Origin"))
 			},
 		},
 	}

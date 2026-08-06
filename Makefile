@@ -54,6 +54,7 @@ pull: ## Base image'larni oldindan yuklab oladi (tarmoq beqaror bo'lsa foydali)
 	-docker pull golang:1.25-alpine
 	-docker pull alpine:3.20
 	-docker pull qdrant/qdrant:v1.12.4
+	-docker pull postgres:16-alpine
 
 .PHONY: up
 up: ## Barcha servislarni ishga tushiradi
