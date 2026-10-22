@@ -12,3 +12,22 @@ qdrant_storage/
 .DS_Store
 python-ai-service/scripts/.samples/
 *.zip
+# Muhit fayllari: faqat shablon kuzatiladi. `.env.bak.*` kabi zaxira
+# nusxalarida ham haqiqiy sirlar (ADMIN_BOOTSTRAP_KEY, parollar) turadi.
+.env.*
+!.env.example
+*.bak*
+
+# Kalitlar va sertifikatlar
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python/Go qoldiqlari
+.pytest_cache/
+.mypy_cache/
+*.test
+coverage.*
+.idea/
+.vscode/
