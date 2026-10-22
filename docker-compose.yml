@@ -131,7 +131,9 @@ services:
     container_name: face-backend
     restart: unless-stopped
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      # Standart holatda faqat shu mashinaga ochiq: biometrik API'ni LAN'ga
+      # chiqarish ATAYLAB qilinadigan qaror bo'lsin (BACKEND_BIND=0.0.0.0).
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
     environment:
       PORT: 8080
       GIN_MODE: ${GIN_MODE:-release}
@@ -153,7 +155,12 @@ services:
       # MATCH_THRESHOLD dan 0.10 past qilib oladi — sababi `.env.example` da.
       CONFIRM_THRESHOLD: ${CONFIRM_THRESHOLD:-0}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
-      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-*}
+      # `none`: brauzer to'g'ridan-to'g'ri ulana olmaydi — VMS backend proksi
+      # orqali, Origin'siz ulanadi. `*` faqat dev'da, aniq yozilganda.
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-none}
+      # Aktiv liveness (tasodifiy "boshni bur" buyrug'i). Yozib olingan
+      # videoni faqat shu to'sadi; o'chirish — aniq qaror bo'lishi kerak.
+      ACTIVE_LIVENESS_ENABLED: ${ACTIVE_LIVENESS_ENABLED:-true}
 
       # --- Kirish nazorati ---
       POSTGRES_HOST: face-postgres

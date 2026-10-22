@@ -78,7 +78,6 @@ type Config struct {
 	// sezmasdi, chunki ikkala son ham "oqilona" ko'rinadi.
 	ConfirmThreshold float32
 
-
 	// EnrollDetScore, EnrollMinFaceSize — faqat ro'yxatga olish uchun.
 	// 0 bo'lsa tekshiruv o'tkazilmaydi (eski xatti-harakat).
 	EnrollDetScore    float32
@@ -181,7 +180,8 @@ func Load() (*Config, error) {
 		AuditQueueSize:         envInt("AUDIT_QUEUE_SIZE", 2048),
 		MetricsEnabled:         envBool("METRICS_ENABLED", true),
 		SwaggerEnabled:         envBool("SWAGGER_ENABLED", true),
-		ActiveLivenessEnabled:  envBool("ACTIVE_LIVENESS_ENABLED", false),
+		// Standart yoqiq: yozib olingan videoni faqat aktiv challenge to'sadi.
+		ActiveLivenessEnabled: envBool("ACTIVE_LIVENESS_ENABLED", true),
 	}
 
 	if err := cfg.validate(); err != nil {
