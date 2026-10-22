@@ -34,6 +34,11 @@ type Config struct {
 	// Python AI service (gRPC)
 	AIServiceTarget string
 	AITimeout       time.Duration
+	// AI gRPC TLS (ixtiyoriy). CA bo'sh — TLS o'chiq. Qarang: faceai.LoadTLS.
+	AITLSCAFile     string
+	AITLSCertFile   string
+	AITLSKeyFile    string
+	AITLSServerName string
 
 	// Qdrant
 	QdrantURL        string
@@ -144,6 +149,10 @@ func Load() (*Config, error) {
 		// gRPC manzili: "host:port" (sxemasiz).
 		AIServiceTarget: normalizeTarget(env("AI_SERVICE_TARGET", "ai-service:50051")),
 		AITimeout:       envDuration("AI_TIMEOUT", 30*time.Second),
+		AITLSCAFile:     env("AI_GRPC_TLS_CA_FILE", ""),
+		AITLSCertFile:   env("AI_GRPC_TLS_CERT_FILE", ""),
+		AITLSKeyFile:    env("AI_GRPC_TLS_KEY_FILE", ""),
+		AITLSServerName: env("AI_GRPC_TLS_SERVER_NAME", ""),
 
 		QdrantURL:        strings.TrimRight(env("QDRANT_URL", "http://qdrant:6333"), "/"),
 		QdrantAPIKey:     env("QDRANT_API_KEY", ""),

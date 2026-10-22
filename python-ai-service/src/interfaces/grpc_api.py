@@ -251,6 +251,36 @@ class FaceServicer(face_pb2_grpc.FaceServiceServicer):
 
 # --------------------------------------------------------------------- server
 
+def _server_credentials() -> Optional[grpc.ServerCredentials]:
+    """GRPC_TLS_* dan server sertifikatini yasaydi; sozlanmagan bo'lsa None.
+
+    Faqat bittasi (sertifikat yoki kalit) berilgan bo'lsa — bu xato, jimgina
+    ochiq portga tushib qolinmaydi.
+    """
+    cert, key = settings.grpc_tls_cert_file, settings.grpc_tls_key_file
+    if not cert and not key:
+        return None
+    if not cert or not key:
+        raise RuntimeError("GRPC_TLS_CERT_FILE va GRPC_TLS_KEY_FILE birga berilishi kerak")
+
+    with open(key, "rb") as f:
+        private_key = f.read()
+    with open(cert, "rb") as f:
+        certificate_chain = f.read()
+
+    client_ca = None
+    if settings.grpc_tls_client_ca_file:
+        with open(settings.grpc_tls_client_ca_file, "rb") as f:
+            client_ca = f.read()
+
+    logger.info("gRPC TLS yoqilgan (mTLS: %s)", "ha" if client_ca else "yo'q")
+    return grpc.ssl_server_credentials(
+        [(private_key, certificate_chain)],
+        root_certificates=client_ca,
+        require_client_auth=client_ca is not None,
+    )
+
+
 async def serve(host: str, port: int) -> grpc.aio.Server:
     """gRPC serverni ishga tushiradi va uni qaytaradi (to'xtatish chaqiruvchida)."""
     server = grpc.aio.server(
@@ -281,7 +311,16 @@ async def serve(host: str, port: int) -> grpc.aio.Server:
         logger.warning("grpcio-reflection o'rnatilmagan — reflection o'chirilgan.")
 
     address = f"{host}:{port}"
-    server.add_insecure_port(address)
+    credentials = _server_credentials()
+    if credentials is None:
+        logger.warning(
+            "gRPC TLS'siz tinglamoqda (%s). Faqat yopiq ichki tarmoqda qabul qilinadi — "
+            "GRPC_TLS_CERT_FILE/GRPC_TLS_KEY_FILE (va mTLS uchun GRPC_TLS_CLIENT_CA_FILE) qo'ying.",
+            address,
+        )
+        server.add_insecure_port(address)
+    else:
+        server.add_secure_port(address, credentials)
     await server.start()
     logger.info("gRPC server tinglamoqda: %s", address)
     return server

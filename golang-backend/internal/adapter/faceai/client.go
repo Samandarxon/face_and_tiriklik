@@ -7,11 +7,15 @@ package faceai
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
@@ -32,6 +36,10 @@ type Config struct {
 	Target         string        // "ai-service:50051"
 	Timeout        time.Duration // unary chaqiruvlar uchun
 	MaxMessageSize int
+	// TLS — nil bo'lmasa ulanish TLS bilan (AI servis sertifikati shu CA
+	// bilan tekshiriladi, mTLS uchun mijoz sertifikati ham shu yerda).
+	// Nil: avvalgidek ochiq kanal, faqat yopiq ichki tarmoqda.
+	TLS *tls.Config
 }
 
 // New — ulanishni yaratadi. `grpc.NewClient` lazy ishlaydi: haqiqiy ulanish
@@ -42,8 +50,13 @@ func New(cfg Config) (*Client, error) {
 		cfg.MaxMessageSize = 16 << 20
 	}
 
+	transport := insecure.NewCredentials()
+	if cfg.TLS != nil {
+		transport = credentials.NewTLS(cfg.TLS)
+	}
+
 	conn, err := grpc.NewClient(cfg.Target,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(transport),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(cfg.MaxMessageSize),
 			grpc.MaxCallSendMsgSize(cfg.MaxMessageSize),
@@ -63,6 +76,43 @@ func New(cfg Config) (*Client, error) {
 }
 
 func (c *Client) Close() error { return c.conn.Close() }
+
+// LoadTLS — AI_GRPC_TLS_* fayllaridan mijoz TLS sozlamasini yasaydi.
+//
+// caFile bo'sh bo'lsa nil qaytadi, ya'ni TLS o'chiq (avvalgi xatti-harakat).
+// CA berilsa AI servis sertifikati shu CA bilan tekshiriladi; certFile va
+// keyFile ham berilsa — mTLS: AI servis faqat shu sertifikat egasini
+// qabul qiladi. Bittasi berilib ikkinchisi berilmasa — xato, jimgina
+// sertifikatsiz ulanib ketilmaydi.
+func LoadTLS(caFile, certFile, keyFile, serverName string) (*tls.Config, error) {
+	if caFile == "" {
+		if certFile != "" || keyFile != "" {
+			return nil, fmt.Errorf("AI_GRPC_TLS_CA_FILE ko'rsatilmagan, lekin mijoz sertifikati berilgan")
+		}
+		return nil, nil
+	}
+	pem, err := os.ReadFile(caFile) // #nosec G304 — operator bergan yo'l
+	if err != nil {
+		return nil, fmt.Errorf("AI gRPC CA o'qilmadi: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("AI gRPC CA faylida sertifikat topilmadi: %s", caFile)
+	}
+	out := &tls.Config{RootCAs: pool, ServerName: serverName, MinVersion: tls.VersionTLS12}
+
+	if (certFile == "") != (keyFile == "") {
+		return nil, fmt.Errorf("AI_GRPC_TLS_CERT_FILE va AI_GRPC_TLS_KEY_FILE birga berilishi kerak")
+	}
+	if certFile != "" {
+		pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("AI gRPC mijoz sertifikati yuklanmadi: %w", err)
+		}
+		out.Certificates = []tls.Certificate{pair}
+	}
+	return out, nil
+}
 
 // Interfeys bajarilganini kompilyatsiya vaqtida tekshiramiz.
 var _ domain.FaceAnalyzer = (*Client)(nil)

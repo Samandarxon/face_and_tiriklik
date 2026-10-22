@@ -42,6 +42,13 @@ class Settings:
     grpc_host: str = field(default_factory=lambda: _env_str("GRPC_HOST", "0.0.0.0"))
     grpc_port: int = field(default_factory=lambda: _env_int("GRPC_PORT", 50051))
     grpc_enabled: bool = field(default_factory=lambda: _env_bool("GRPC_ENABLED", True))
+    # gRPC TLS (ixtiyoriy). Sertifikat + kalit berilsa server TLS bilan
+    # tinglaydi; CA ham berilsa mijozdan sertifikat TALAB qilinadi (mTLS) —
+    # ya'ni faqat face-backend ulana oladi. Bo'sh bo'lsa: avvalgidek ochiq
+    # port, faqat ichki docker tarmog'ida xavfsiz.
+    grpc_tls_cert_file: str = field(default_factory=lambda: _env_str("GRPC_TLS_CERT_FILE", ""))
+    grpc_tls_key_file: str = field(default_factory=lambda: _env_str("GRPC_TLS_KEY_FILE", ""))
+    grpc_tls_client_ca_file: str = field(default_factory=lambda: _env_str("GRPC_TLS_CLIENT_CA_FILE", ""))
     log_level: str = field(default_factory=lambda: _env_str("LOG_LEVEL", "INFO").upper())
 
     # --- Qurilma (GPU/CPU avto-moslashuv) ---

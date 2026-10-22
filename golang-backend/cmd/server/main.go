@@ -94,10 +94,19 @@ func run(log *slog.Logger) error {
 	subjects := security.NewSubjectResolver(cfg.StrictPNFL)
 
 	// --- Adapterlar (tashqi dunyo) ---
+	aiTLS, err := faceai.LoadTLS(cfg.AITLSCAFile, cfg.AITLSCertFile, cfg.AITLSKeyFile, cfg.AITLSServerName)
+	if err != nil {
+		return err
+	}
+	if aiTLS == nil {
+		log.Warn("AI servis bilan gRPC TLS'siz — faqat yopiq ichki tarmoqda qabul qilinadi",
+			"hint", "AI_GRPC_TLS_CA_FILE (va mTLS uchun AI_GRPC_TLS_CERT_FILE/KEY_FILE)")
+	}
 	analyzer, err := faceai.New(faceai.Config{
 		Target:         cfg.AIServiceTarget,
 		Timeout:        cfg.AITimeout,
 		MaxMessageSize: int(cfg.MaxUploadBytes) + (8 << 20),
+		TLS:            aiTLS,
 	})
 	if err != nil {
 		return err
