@@ -77,17 +77,28 @@ type Challenge struct {
 
 	// centred — foydalanuvchi markazga qaraganini ko'rdikmi.
 	centred bool
+	// actionDeadline — markaz ko'ringan paytdan ChallengeActionTTL keyin.
+	actionDeadline time.Time
 	// done — harakat bajarildimi.
 	done bool
 }
 
-// ChallengeTTL — buyruq berilgandan javob kelgunicha bo'lgan oyna.
+// Muddat ikki qismdan iborat.
 //
+// ChallengeTTL — buyruq berilgandan yakuniy tasdiqgacha bo'lgan UMUMIY oyna.
+// U kamera ochilishi, yuz topilishi, passiv liveness va markazga qarashni
+// o'z ichiga oladi. Avval shu birgina oyna 5 soniya edi va oqim ochilgan
+// zahoti boshlanardi: GPU'siz serverda kadrlar sekin qayta ishlanadi va odam
+// markazga qarab ulgurmasdan muddat tugardi — face login umuman o'tmasdi.
+//
+// ChallengeActionTTL — markaz ko'ringandan keyin buyruqni bajarish oynasi.
 // Qisqa bo'lishi ATAYLAB: hujumchi buyruqni ko'rgach kerakli videoni topishi
 // yoki generatsiya qilishi uchun vaqt qolmasligi kerak. Odam uchun boshini
-// burish bir soniyalik ish, shuning uchun bu cheklov real foydalanuvchiga
-// sezilmaydi.
-const ChallengeTTL = 5 * time.Second
+// burish bir soniyalik ish; zaxira sekin CPU'dagi kadr kechikishi uchun.
+const (
+	ChallengeTTL       = 20 * time.Second
+	ChallengeActionTTL = 6 * time.Second
+)
 
 // ChallengeStore — berilgan buyruqlar ombori.
 //
@@ -177,6 +188,10 @@ func (s *ChallengeStore) Observe(nonce string, pose *domain.HeadPose) ChallengeS
 	if ch.done {
 		return ChallengePassed
 	}
+	if ch.centred && s.now().After(ch.actionDeadline) {
+		delete(s.items, nonce)
+		return ChallengeExpired
+	}
 
 	// Ma'lumotsiz kadr holatni o'zgartirmaydi. Uni "bajarilmadi" deb hisoblash
 	// ham noto'g'ri bo'lardi (bitta xira kadr butun urinishni bekor qilardi),
@@ -191,6 +206,7 @@ func (s *ChallengeStore) Observe(nonce string, pose *domain.HeadPose) ChallengeS
 	if !ch.centred {
 		if abs(pose.Yaw) <= challengeCentreTolerance {
 			ch.centred = true
+			ch.actionDeadline = s.now().Add(ChallengeActionTTL)
 			return ChallengeAwaitingAction
 		}
 		return ChallengeAwaitingCentre
@@ -270,7 +286,7 @@ func randomAction() (ChallengeAction, error) {
 
 // collectGarbage — muddati o'tgan buyruqlarni tozalaydi.
 //
-// Har biri besh soniyada o'ladi, lekin bajarilmagan urinishlar o'z-o'zidan
+// Har biri ChallengeTTL ichida o'ladi, lekin bajarilmagan urinishlar o'z-o'zidan
 // o'chmaydi: ularni tozalamasa, xotira sekin o'sib boradi.
 func (s *ChallengeStore) collectGarbage() {
 	ticker := time.NewTicker(30 * time.Second)

@@ -195,9 +195,57 @@ func TestPassedButExpiredIsStillRejected(t *testing.T) {
 }
 
 func TestTTLIsShort(t *testing.T) {
-	// Uzun oyna hujumchiga video tayyorlash uchun vaqt beradi.
-	if ChallengeTTL > 10*time.Second {
+	// Uzun harakat oynasi hujumchiga video tayyorlash uchun vaqt beradi.
+	if ChallengeActionTTL > 10*time.Second {
+		t.Fatalf("ChallengeActionTTL juda uzun: %v", ChallengeActionTTL)
+	}
+	if ChallengeTTL > 30*time.Second {
 		t.Fatalf("ChallengeTTL juda uzun: %v", ChallengeTTL)
+	}
+}
+
+// Sekin CPU: markazga qarash kech ko'rinsa ham urinish tirik qolishi kerak —
+// harakat oynasi markaz ko'ringan paytdan boshlanadi, oqim ochilganidan emas.
+func TestSlowCentreStillHasFullActionWindow(t *testing.T) {
+	s, advance := testStore()
+
+	ch, _ := s.Issue()
+	turn := -30.0
+	if ch.Action == ChallengeTurnRight {
+		turn = 30.0
+	}
+
+	advance(ChallengeActionTTL + 2*time.Second) // kamera/model sekin ochildi
+	if got := s.Observe(ch.Nonce, pose(0)); got != ChallengeAwaitingAction {
+		t.Fatalf("awaiting_action kutilgan, olindi: %s", got)
+	}
+	advance(ChallengeActionTTL - time.Second)
+	if got := s.Observe(ch.Nonce, pose(turn)); got != ChallengePassed {
+		t.Fatalf("passed kutilgan, olindi: %s", got)
+	}
+	if err := s.Consume(ch.Nonce); err != nil {
+		t.Fatalf("Consume: %v", err)
+	}
+}
+
+// Markazdan keyin harakat oynasi o'tib ketsa — umumiy muddat qolgan bo'lsa ham
+// rad etiladi.
+func TestActionWindowExpiresAfterCentre(t *testing.T) {
+	s, advance := testStore()
+
+	ch, _ := s.Issue()
+	turn := -30.0
+	if ch.Action == ChallengeTurnRight {
+		turn = 30.0
+	}
+
+	s.Observe(ch.Nonce, pose(0))
+	advance(ChallengeActionTTL + time.Second)
+	if got := s.Observe(ch.Nonce, pose(turn)); got != ChallengeExpired {
+		t.Fatalf("expired kutilgan, olindi: %s", got)
+	}
+	if err := s.Consume(ch.Nonce); err == nil {
+		t.Fatal("harakat oynasi o'tgandan keyin qabul qilindi")
 	}
 }
 
