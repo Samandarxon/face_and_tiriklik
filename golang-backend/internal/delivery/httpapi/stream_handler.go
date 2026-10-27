@@ -60,6 +60,9 @@ type StreamHandler struct {
 	log        *slog.Logger
 	upgrader   websocket.Upgrader
 	liveStreak int
+	// continuity — challenge va tanish kadrlari bir odamga tegishli
+	// ekanini tekshirish chegarasi (usecase.IdentityTrack).
+	continuity float32
 }
 
 func NewStreamHandler(
@@ -185,6 +188,10 @@ func (h *StreamHandler) Handle(c *gin.Context) {
 		"challenge_passed", session.challengePassed)
 }
 
+// SetContinuityThreshold — challenge va tanish kadrlari bir odamga tegishli
+// ekanini tekshirish chegarasi. 0 — usecase.DefaultContinuityThreshold.
+func (h *StreamHandler) SetContinuityThreshold(t float32) { h.continuity = t }
+
 // streamSession — bitta WebSocket ulanishining holati.
 type streamSession struct {
 	handler   *StreamHandler
@@ -203,6 +210,9 @@ type streamSession struct {
 	// movement has to be seen first.
 	challengeNonce  string
 	challengePassed bool
+	// track — challenge'ni bajargan odam bilan tanilayotgan odam bir
+	// ekanini kafolatlaydi. challengeNonce bilan birga o'rnatiladi.
+	track *usecase.IdentityTrack
 
 	// Oqim xulosasi uchun: har bir hodisa turi (va xato kodi) necha marta
 	// yuborilgani, challenge oxirgi qaysi holatda qolgani. Yopilishda bitta
@@ -309,6 +319,10 @@ func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
 			return
 		}
 		s.challengeNonce = ch.Nonce
+		s.track = usecase.NewIdentityTrack(s.handler.continuity)
+		// Challenge davomidagi HAR bir kadr vektor bilan so'raladi: harakat
+		// bajarilgan kadr ham shaxsga bog'lanishi kerak.
+		s.wantEmbedding.Store(true)
 		ready.Challenge = ch
 		ready.ChallengeState = usecase.ChallengeAwaitingCentre
 	}
@@ -379,11 +393,33 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 	// aktiv tekshiruv esa yozib olingan materialni to'sadi. Ikkalasi o'tmasa
 	// bazaga umuman murojaat qilinmaydi.
 	if s.challengeNonce != "" && !s.challengePassed {
+		// Vektorsiz kadr harakat sifatida HISOBLANMAYDI: aks holda
+		// harakatni kim bajargani noma'lum qolardi.
+		if result.Face == nil || result.Face.Embedding.Dim() == 0 {
+			s.wantEmbedding.Store(true)
+			return s.emit(event{
+				Type: "liveness", FrameID: result.FrameID,
+				Liveness: result.Liveness, BBox: faceBBox(result),
+				ProcessingMs: result.ProcessingMs,
+			})
+		}
+		if !s.track.Same(result.Face.Embedding) {
+			return s.identityChanged(result)
+		}
 		state := s.handler.challenges.Observe(s.challengeNonce, result.Face.Pose)
 
 		switch state {
 		case usecase.ChallengePassed:
 			s.challengePassed = true
+			// Bu kadrda bosh burilgan — tanish uchun keyingi (to'g'ri
+			// qaragan) kadr so'raladi, u ham shu odam bo'lishi shart.
+			s.wantEmbedding.Store(true)
+			return s.emit(event{
+				Type: "liveness", FrameID: result.FrameID,
+				Liveness: result.Liveness, BBox: &result.Face.BBox,
+				Pose: result.Face.Pose, ChallengeState: state,
+				ProcessingMs: result.ProcessingMs,
+			})
 		case usecase.ChallengeExpired, usecase.ChallengeUnknown:
 			// Muddat tugadi: yangi buyruq berish o'rniga oqim to'xtatiladi.
 			// Cheksiz qayta urinish hujumchiga kerakli buyruq chiqquncha
@@ -396,9 +432,9 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 			})
 			return false
 		default:
-			// Hali bajarilmadi — foydalanuvchiga holatni ko'rsatamiz va
-			// vektorni SO'RAMAYMIZ.
-			s.wantEmbedding.Store(false)
+			// Hali bajarilmadi — holatni ko'rsatamiz; keyingi kadr ham
+			// vektor bilan so'raladi (shaxsni kuzatish uchun).
+			s.wantEmbedding.Store(true)
 			return s.emit(event{
 				Type: "liveness", FrameID: result.FrameID,
 				Liveness: result.Liveness, BBox: &result.Face.BBox,
@@ -430,6 +466,32 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 	})
 }
 
+// identityChanged — challenge davomida kamera oldidagi odam almashdi.
+// Oqim yopiladi va buyruq bekor qilinadi: qayta urinish yangi ulanish va
+// yangi buyruq bilan bo'ladi.
+func (s *streamSession) identityChanged(result *domain.FrameResult) bool {
+	s.handler.log.Warn("stream: challenge davomida shaxs almashdi",
+		"request_id", s.requestID, "frame_id", result.FrameID)
+	if s.challengeNonce != "" {
+		_ = s.handler.challenges.Consume(s.challengeNonce)
+		s.challengeNonce = ""
+	}
+	s.emit(event{
+		Type: "spoof", FrameID: result.FrameID,
+		Code:     domain.CodeSpoofDetected,
+		Message:  "Tekshiruv davomida kamera oldidagi odam almashdi. Qaytadan urinib ko'ring.",
+		Liveness: result.Liveness, BBox: faceBBox(result),
+	})
+	return false
+}
+
+func faceBBox(result *domain.FrameResult) *domain.BoundingBox {
+	if result.Face == nil {
+		return nil
+	}
+	return &result.Face.BBox
+}
+
 // matchAndReport — STEP 3: vektorni bazadan qidiradi.
 //
 // Bu chaqiruv oqimni qisqa muddat bloklaydi (~5 ms) — bu ataylab: natija
@@ -438,6 +500,9 @@ func (s *streamSession) matchAndReport(ctx context.Context, result *domain.Frame
 	// Yakuniy tasdiq va buyruqni ISHLATIB YUBORISH. Observe() faqat holatni
 	// kuzatadi; aynan shu chaqiruv buyruqni bir martalik qiladi, ya'ni
 	// muvaffaqiyatli seansni qayta o'ynatib bo'lmaydi.
+	if s.track != nil && !s.track.Same(result.Face.Embedding) {
+		return s.identityChanged(result)
+	}
 	if s.challengeNonce != "" {
 		if err := s.handler.challenges.Consume(s.challengeNonce); err != nil {
 			s.challengeNonce = ""

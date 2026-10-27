@@ -139,6 +139,11 @@ type Config struct {
 	// operatorniki bo'lishi kerak. Yoqilganda tanish MAJBURIY ravishda
 	// buyruq bajarilishini kutadi.
 	ActiveLivenessEnabled bool
+
+	// ChallengeContinuity — challenge kadrlari va tanish kadri bir odamga
+	// tegishli bo'lishi uchun kosinus chegarasi (CHALLENGE_CONTINUITY_THRESHOLD).
+	// 0 — usecase.DefaultContinuityThreshold.
+	ChallengeContinuity float32
 }
 
 func Load() (*Config, error) {
@@ -198,6 +203,7 @@ func Load() (*Config, error) {
 		SwaggerEnabled:         envBool("SWAGGER_ENABLED", true),
 		// Standart yoqiq: yozib olingan videoni faqat aktiv challenge to'sadi.
 		ActiveLivenessEnabled: envBool("ACTIVE_LIVENESS_ENABLED", true),
+		ChallengeContinuity:   float32(envFloat("CHALLENGE_CONTINUITY_THRESHOLD", 0)),
 	}
 
 	if err := cfg.validate(); err != nil {

@@ -174,12 +174,14 @@ func run(log *slog.Logger) error {
 	defer limiter.Close()
 
 	gin.SetMode(cfg.GinMode)
+	stream := httpapi.NewStreamHandler(analyzer, verifier, tickets, audit, metrics, cfg.CORSAllowOrigin, log, challenges)
+	stream.SetContinuityThreshold(cfg.ChallengeContinuity)
 	routerDeps := httpapi.Deps{
 		Person: httpapi.NewPersonHandler(
 			registrar, verifier, confirmer, probe, directory, resolver,
 			audit, metrics, cfg.MaxUploadBytes),
 		Health:  httpapi.NewHealthHandler(analyzer, repo, store, cfg.QdrantCollection),
-		Stream:  httpapi.NewStreamHandler(analyzer, verifier, tickets, audit, metrics, cfg.CORSAllowOrigin, log, challenges),
+		Stream:  stream,
 		Admin:   httpapi.NewAdminHandler(keyManager, authenticator, store, audit),
 		Ticket:  httpapi.NewTicketHandler(tickets),
 		Auth:    authenticator,
