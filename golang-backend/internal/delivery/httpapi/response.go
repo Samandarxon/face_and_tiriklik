@@ -35,6 +35,10 @@ var statusByCode = map[domain.Code]int{
 	domain.CodeUnauthenticated: http.StatusUnauthorized,
 	domain.CodeForbidden:       http.StatusForbidden,
 	domain.CodeRateLimited:     http.StatusTooManyRequests,
+	domain.CodeNotFound:        http.StatusNotFound,
+	// register `replace` siz mavjud yozuvga kelganda ham shu kod: mijoz 500
+	// ni qayta urinish signali deb oladi, 409 esa "yozuv bor" degani.
+	domain.CodeConflict: http.StatusConflict,
 }
 
 func httpStatus(code domain.Code) int {

@@ -484,6 +484,7 @@ Scope: `face:register`
 | `subject_id` | ❌ | **Tavsiya etiladi.** PNFL yoki tabel raqami — servis uni hashlaydi |
 | `person_id` | ❌ | Tayyor `person_id` (`subject_id` bilan birga yuborilmaydi) |
 | `name` | ❌ | Ixtiyoriy yorliq. Shaxsiy ma'lumot yubormaslik afzal |
+| `replace` | ❌ | `true` — mavjud yozuvning yuzini almashtirish. Standart `false`: yozuv bor bo'lsa `409 already_exists` |
 
 Ikkalasi ham berilmasa servis tasodifiy ID beradi (anonim yozuv).
 
@@ -515,12 +516,17 @@ curl -X POST http://localhost:8080/api/v1/persons/register \
 Ketma-ketlik: Golang → AI servis (`/v1/face/embed`) → 512-dim vektor →
 Qdrant `upsert` (`person_id` + `name` payload bilan).
 
-**Mavjud insonning yuzini yangilash** — o'sha `person_id` ni yuboring:
+**Mavjud insonning yuzini yangilash** — o'sha `person_id` ni `replace=true`
+bilan yuboring. `replace` siz so'rov `409 already_exists` qaytaradi: aks holda
+PNFL'ni bilgan har qanday mijoz boshqa odamning yuzini o'zinikiga almashtirib,
+uning nomidan yuz orqali kira olardi. `replace=true` ni faqat ishonchli,
+audit qilinadigan administrator amali uchun yuboring.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/persons/register \
   -F "person_id=3f2a8c14-7b91-4d6e-a052-1c8f9e4b7d30" \
   -F "name=Ali Valiyev" \
+  -F "replace=true" \
   -F "image=@ali-yangi.jpg"
 # -> 200 OK, "updated": true, "generated_id": false — dublikat yaratilmaydi
 ```

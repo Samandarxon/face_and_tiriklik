@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/face_detecting_microservice/golang-backend/internal/domain"
@@ -33,6 +34,11 @@ type RegisterCommand struct {
 	// anti-spoofing, keyin vektor. Arxiv fotosi yoki passport skani uchun
 	// o'chiq qoldiriladi (ular ta'rifga ko'ra "spoof").
 	RequireLiveness bool
+	// Replace — mavjud yozuvning vektorini almashtirishga ANIQ ruxsat.
+	// Standart false: yozuv bor bo'lsa `already_exists` qaytadi. Aks holda
+	// PNFL'ni bilgan har qanday mijoz boshqa odamning yuzini o'zinikiga
+	// almashtirib, keyin uning nomidan yuz orqali kira olardi.
+	Replace bool
 }
 
 // Registrar — insonni bazaga qo'shish stsenariysi.
@@ -46,6 +52,12 @@ type Registrar struct {
 	gate EnrollGate
 	log  *slog.Logger
 	now  func() time.Time
+	// writeMu — "bormi?" tekshiruvi va yozuvni bitta amalga aylantiradi:
+	// bir PNFL uchun bir vaqtda kelgan ikki register ikkalasi ham "yo'q"
+	// ko'rib, biri ikkinchisini jimgina almashtirib yubormasin. Faqat shu
+	// jarayon ichida ishlaydi — bir nechta nusxada ishga tushirilsa, bu
+	// kafolat yo'qoladi.
+	writeMu sync.Mutex
 }
 
 // EnrollGate — ro'yxatga olish uchun sifat chegarasi.
@@ -178,12 +190,21 @@ func (r *Registrar) Execute(ctx context.Context, cmd RegisterCommand) (*domain.R
 
 	// Generatsiya qilingan ID uchun mavjud yozuv bo'lishi mumkin emas —
 	// ortiqcha so'rov yubormaymiz.
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
 	updated := false
 	if !generated {
 		existing, err := r.repo.Get(ctx, personID)
 		if err != nil {
-			r.log.Warn("mavjud yozuvni tekshirib bo'lmadi", "person_id", personID, "error", err)
-		} else if existing != nil {
+			// Tekshirib bo'lmasa yozmaymiz: aks holda Replace'siz so'rov
+			// ham mavjud yuzni almashtirib yuborishi mumkin edi.
+			return nil, err
+		}
+		if existing != nil {
+			if !cmd.Replace {
+				return nil, domain.NewError(domain.CodeConflict,
+					"Bu shaxs bazada allaqachon bor. Yuzni almashtirish uchun `replace=true` yuboring.")
+			}
 			updated = true
 			person.CreatedAt = existing.CreatedAt
 			person.UpdatedAt = now

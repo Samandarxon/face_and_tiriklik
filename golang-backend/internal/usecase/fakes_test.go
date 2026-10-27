@@ -76,6 +76,7 @@ type fakeRepo struct {
 	vectors map[string]domain.Embedding
 	matches []domain.Match
 	saveErr error
+	getErr  error
 
 	// searchCalls — ENG MUHIM hisoblagich: soxta kadrda 0 bo'lishi shart.
 	searchCalls atomic.Int32
@@ -137,6 +138,9 @@ func (r *fakeRepo) ScoreAgainst(
 }
 
 func (r *fakeRepo) Get(_ context.Context, personID string) (*domain.Person, error) {
+	if r.getErr != nil {
+		return nil, r.getErr
+	}
 	if person, ok := r.stored[personID]; ok {
 		return &person, nil
 	}
