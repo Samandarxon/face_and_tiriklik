@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${FACE_POSTGRES_USER:-face}
-      POSTGRES_PASSWORD: ${FACE_POSTGRES_PASSWORD:-***REMOVED***}
+      POSTGRES_PASSWORD: ${FACE_POSTGRES_PASSWORD:?FACE_POSTGRES_PASSWORD .env da majburiy}
       POSTGRES_DB: ${FACE_POSTGRES_DB:-face_auth}
     volumes:
       - face_pgdata:/var/lib/postgresql/data
@@ -170,7 +170,7 @@ services:
       POSTGRES_HOST: face-postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${FACE_POSTGRES_USER:-face}
-      POSTGRES_PASSWORD: ${FACE_POSTGRES_PASSWORD:-***REMOVED***}
+      POSTGRES_PASSWORD: ${FACE_POSTGRES_PASSWORD:?FACE_POSTGRES_PASSWORD .env da majburiy}
       POSTGRES_DB: ${FACE_POSTGRES_DB:-face_auth}
 
       # MAJBURIY. Yasash: make secrets  (yoki: openssl rand -base64 48)
