@@ -122,9 +122,10 @@ func TestVerifyReturnsNotFoundBelowThreshold(t *testing.T) {
 	}
 
 	domainErr, _ := domain.AsError(err)
-	// Chegara sozlashda yordam berishi uchun eng yaqin ball qaytariladi.
-	if domainErr.Details["best_score"] != float32(0.6499) {
-		t.Fatalf("best_score = %v", domainErr.Details["best_score"])
+	// Eng yaqin ball mijozga QAYTARILMAYDI: u chegaraga qadamma-qadam
+	// yaqinlashish uchun orakul bo'lardi. U faqat logda.
+	if _, leaked := domainErr.Details["best_score"]; leaked {
+		t.Fatalf("best_score javobga chiqdi: %v", domainErr.Details)
 	}
 	// Tirik inson bo'lgani uchun liveness ham qaytadi.
 	if domainErr.Liveness == nil || !domainErr.Liveness.IsReal {
@@ -182,5 +183,48 @@ func TestLivenessProbePropagatesRealErrors(t *testing.T) {
 
 	if _, err := NewLivenessProbe(analyzer).Execute(context.Background(), []byte("f"), "req"); domain.CodeOf(err) != domain.CodeNoFaceDetected {
 		t.Fatalf("no_face_detected kutilgan, olindi: %v", err)
+	}
+}
+
+// Ikkinchi nomzod birinchiga juda yaqin bo'lsa — natija noaniq va rad
+// etiladi: kim ekanini tasodif hal qilardi.
+func TestVerifyRejectsAmbiguousMatch(t *testing.T) {
+	liveness := &domain.Liveness{IsReal: true, RealProbability: 0.95}
+	analyzer := &fakeAnalyzer{face: liveFace(), liveness: liveness}
+
+	repo := newFakeRepo()
+	repo.matches = []domain.Match{
+		{Person: domain.Person{ID: "emp-001"}, Score: 0.70},
+		{Person: domain.Person{ID: "emp-002"}, Score: 0.68},
+	}
+
+	verifier := NewVerifier(analyzer, repo, 0.65, testLogger())
+	verifier.SetMargin(0.05)
+	if _, err := verifier.Execute(context.Background(), []byte("frame"), "req"); domain.CodeOf(err) != domain.CodePersonNotFound {
+		t.Fatalf("noaniq natija qabul qilindi: %v", err)
+	}
+
+	// Farq yetarli bo'lsa — odatdagidek topiladi.
+	repo.matches[1].Score = 0.60
+	result, err := verifier.Execute(context.Background(), []byte("frame"), "req")
+	if err != nil || result.Person.ID != "emp-001" {
+		t.Fatalf("aniq natija rad etildi: %v %+v", err, result)
+	}
+}
+
+// margin 0 — eski xatti-harakat: faqat chegara.
+func TestVerifyMarginZeroKeepsThresholdOnly(t *testing.T) {
+	liveness := &domain.Liveness{IsReal: true, RealProbability: 0.95}
+	analyzer := &fakeAnalyzer{face: liveFace(), liveness: liveness}
+
+	repo := newFakeRepo()
+	repo.matches = []domain.Match{
+		{Person: domain.Person{ID: "emp-001"}, Score: 0.70},
+		{Person: domain.Person{ID: "emp-002"}, Score: 0.69},
+	}
+
+	verifier := NewVerifier(analyzer, repo, 0.65, testLogger())
+	if _, err := verifier.Execute(context.Background(), []byte("frame"), "req"); err != nil {
+		t.Fatalf("margin o'chiq bo'lsa ham rad etildi: %v", err)
 	}
 }

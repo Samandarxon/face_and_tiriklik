@@ -25,7 +25,23 @@ type Verifier struct {
 	analyzer  domain.FaceAnalyzer
 	repo      domain.PersonRepository
 	threshold domain.MatchThreshold
-	log       *slog.Logger
+	// margin — 1-o'rin 2-o'rindan kamida shuncha oldinda bo'lishi kerak.
+	// 0 — tekshirilmaydi. Qarang: SetMargin.
+	margin float32
+	log    *slog.Logger
+}
+
+// SetMargin — 1:N qarorida ikkinchi nomzoddan talab qilinadigan farq.
+//
+// Chegaradan o'tgan, lekin boshqa odam ham deyarli shunday ball olgan
+// natija — taxmin, tanish emas: bunday holatda kim ekanini yaqin turgan
+// ikkinchi nomzod emas, tasodif hal qilardi. Login uchun bu soxta qabul.
+// Shuning uchun bunday natija "topilmadi" deb rad etiladi.
+func (v *Verifier) SetMargin(m float32) {
+	if m < 0 {
+		m = 0
+	}
+	v.margin = m
 }
 
 func NewVerifier(
@@ -93,16 +109,30 @@ func (v *Verifier) match(
 		return nil, err
 	}
 
-	if len(matches) == 0 || !v.threshold.Accepts(matches[0].Score) {
-		details := map[string]any{"threshold": float32(v.threshold)}
+	// Eng yaqin ball faqat logga yoziladi, javobga emas: mijozga qaytarilsa
+	// u "qanchalik yaqinlashdim" orakuliga aylanadi — kadrni shu ball
+	// bo'yicha qadamma-qadam o'zgartirib chegaradan o'tkazish mumkin.
+	notFound := func(reason string) error {
+		logArgs := []any{"request_id", requestID, "reason", reason,
+			"threshold", float32(v.threshold)}
 		if len(matches) > 0 {
-			details["best_score"] = matches[0].Score
+			logArgs = append(logArgs, "best_score", matches[0].Score)
 		}
-		v.log.Info("verify: mos keluvchi topilmadi", "request_id", requestID, "details", details)
+		if len(matches) > 1 {
+			logArgs = append(logArgs, "second_score", matches[1].Score)
+		}
+		v.log.Info("verify: mos keluvchi topilmadi", logArgs...)
 
-		return nil, domain.NewError(domain.CodePersonNotFound, "Bazadan inson topilmadi.").
-			WithDetails(details).
+		return domain.NewError(domain.CodePersonNotFound, "Bazadan inson topilmadi.").
+			WithDetails(map[string]any{"threshold": float32(v.threshold)}).
 			WithLiveness(liveness)
+	}
+
+	if len(matches) == 0 || !v.threshold.Accepts(matches[0].Score) {
+		return nil, notFound("below_threshold")
+	}
+	if v.margin > 0 && len(matches) > 1 && matches[0].Score-matches[1].Score < v.margin {
+		return nil, notFound("ambiguous")
 	}
 
 	best := matches[0]
