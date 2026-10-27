@@ -133,6 +133,7 @@ func run(log *slog.Logger) error {
 			MinFaceSize: cfg.EnrollMinFaceSize,
 		}, log)
 	verifier := usecase.NewVerifier(analyzer, repo, domain.MatchThreshold(cfg.MatchThreshold), log)
+	verifier.SetMargin(cfg.MatchMargin)
 	// Aktiv liveness ixtiyoriy: o'chiq bo'lsa nil uzatiladi va oqim avvalgidek
 	// faqat passiv tekshiruv bilan ishlaydi.
 	var challenges *usecase.ChallengeStore

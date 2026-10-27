@@ -99,10 +99,13 @@ func (h *PersonHandler) finish(
 //	@Param			person_id	formData	string	false	"Tayyor person_id"
 //	@Param			name				formData	string	false	"Ixtiyoriy yorliq"
 //	@Param			require_liveness	formData	bool	false	"Jonli kameradan kelgan kadr uchun anti-spoofing (standart: false)"
+//	@Param			replace				formData	bool	false	"Mavjud yozuvning yuzini almashtirish (standart: false — yozuv bor bo'lsa 409 already_exists)"
 //	@Success		201			{object}	map[string]any
+//	@Success		200			{object}	map[string]any	"replace=true bilan mavjud yozuv almashtirildi"
 //	@Failure		400			{object}	errorBody
 //	@Failure		401			{object}	errorBody
 //	@Failure		403			{object}	errorBody
+//	@Failure		409			{object}	errorBody	"already_exists"
 //	@Failure		422			{object}	errorBody
 //	@Router			/persons/register [post]
 //
@@ -161,6 +164,7 @@ func (h *PersonHandler) Register(c *gin.Context) {
 	// arxiv fotosidan ro'yxatga olinadi, ular esa ta'rifga ko'ra "spoof" —
 	// standart true bo'lsa oddiy ro'yxatga olish butunlay ishlamay qolardi.
 	requireLiveness, _ := strconv.ParseBool(c.PostForm("require_liveness"))
+	replace, _ := strconv.ParseBool(c.PostForm("replace"))
 
 	result, err := h.registrar.Execute(c.Request.Context(), usecase.RegisterCommand{
 		SubjectID:       c.PostForm("subject_id"),
@@ -170,6 +174,7 @@ func (h *PersonHandler) Register(c *gin.Context) {
 		FileName:        filename,
 		RequestID:       requestIDOf(c),
 		RequireLiveness: requireLiveness,
+		Replace:         replace,
 	})
 	if err != nil {
 		h.finish(ac, "register", "", 0, err)

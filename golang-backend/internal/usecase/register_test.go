@@ -48,7 +48,8 @@ func TestRegisterGeneratesIDWhenOmitted(t *testing.T) {
 	}
 }
 
-// Mijoz o'z ID sini bersa — u o'zgartirilmaydi va mavjud yozuv YANGILANADI.
+// Mijoz o'z ID sini bersa — u o'zgartirilmaydi; mavjud yozuv faqat
+// `Replace` bilan YANGILANADI.
 func TestRegisterHonoursClientIDAndUpdates(t *testing.T) {
 	analyzer := &fakeAnalyzer{face: liveFace()}
 	repo := newFakeRepo()
@@ -65,7 +66,7 @@ func TestRegisterHonoursClientIDAndUpdates(t *testing.T) {
 	}
 
 	second, err := registrar.Execute(context.Background(), RegisterCommand{
-		PersonID: "emp-001", Name: "Ali Valiyev", Image: []byte("f2"),
+		PersonID: "emp-001", Name: "Ali Valiyev", Image: []byte("f2"), Replace: true,
 	})
 	if err != nil {
 		t.Fatalf("ikkinchi register: %v", err)
@@ -185,5 +186,50 @@ func TestRegisterRejectsWrongEmbeddingDimension(t *testing.T) {
 	}
 	if repo.saveCalls.Load() != 0 {
 		t.Fatal("noto'g'ri vektor omborga yozilmasligi kerak")
+	}
+}
+
+// Replace'siz register mavjud yuzni almashtirmasligi kerak: aks holda PNFL'ni
+// bilgan mijoz boshqa odamning yuzini o'zinikiga almashtira olardi.
+func TestRegisterRefusesOverwriteWithoutReplace(t *testing.T) {
+	analyzer := &fakeAnalyzer{face: liveFace()}
+	repo := newFakeRepo()
+	registrar := newRegistrar(analyzer, repo)
+
+	if _, err := registrar.Execute(context.Background(), RegisterCommand{
+		PersonID: "emp-001", Image: []byte("victim"),
+	}); err != nil {
+		t.Fatalf("birinchi register: %v", err)
+	}
+	original := repo.vectors["emp-001"]
+
+	attacker := liveFace()
+	attacker.Embedding = make(domain.Embedding, len(original))
+	analyzer.face = attacker
+	_, err := registrar.Execute(context.Background(), RegisterCommand{
+		PersonID: "emp-001", Image: []byte("attacker"),
+	})
+	if domain.CodeOf(err) != domain.CodeConflict {
+		t.Fatalf("already_exists kutilgan, keldi: %v", err)
+	}
+	if repo.saveCalls.Load() != 1 {
+		t.Fatalf("ikkinchi so'rov omborga yozdi (saveCalls=%d)", repo.saveCalls.Load())
+	}
+}
+
+// Mavjudlikni tekshirib bo'lmasa yozilmaydi (fail-closed).
+func TestRegisterFailsClosedWhenLookupFails(t *testing.T) {
+	analyzer := &fakeAnalyzer{face: liveFace()}
+	repo := newFakeRepo()
+	repo.getErr = domain.NewError(domain.CodeVectorDBFailure, "qdrant down")
+
+	_, err := newRegistrar(analyzer, repo).Execute(context.Background(), RegisterCommand{
+		PersonID: "emp-001", Image: []byte("f"),
+	})
+	if err == nil {
+		t.Fatal("xato kutilgan")
+	}
+	if repo.saveCalls.Load() != 0 {
+		t.Fatal("tekshiruv yiqilganda ham yozildi")
 	}
 }

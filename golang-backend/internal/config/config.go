@@ -49,6 +49,9 @@ type Config struct {
 
 	// Biznes qoidalari
 	MatchThreshold float32
+	// MatchMargin — 1:N da 1-o'rin 2-o'rindan kamida shuncha oldinda
+	// bo'lmasa natija noaniq deb rad etiladi (MATCH_MARGIN). 0 — o'chiq.
+	MatchMargin float32
 
 	// ConfirmThreshold — 1:1 tasdiqlash (`/persons/{id}/verify`) uchun
 	// ALOHIDA chegara.
@@ -161,6 +164,10 @@ func Load() (*Config, error) {
 		QdrantTimeout:    envDuration("QDRANT_TIMEOUT", 15*time.Second),
 
 		MatchThreshold: float32(envFloat("MATCH_THRESHOLD", 0.65)),
+		// 0.05 — buffalo_l kosinus ballida yaqin "egizak" holatlarni
+		// ajratadigan ehtiyotkor qiymat. Haqiqiy FAR/FRR bazada o'lchanib
+		// sozlanishi kerak.
+		MatchMargin: float32(envFloat("MATCH_MARGIN", 0.05)),
 
 		// 0 = sozlanmagan. Aniq son emas: standart qiymat `MatchThreshold`
 		// ga NISBATAN hisoblanadi — sababi maydon izohida.
