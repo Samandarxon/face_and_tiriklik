@@ -178,6 +178,11 @@ func (h *StreamHandler) Handle(c *gin.Context) {
 
 	session := &streamSession{handler: h, conn: conn, stream: stream, requestID: requestID}
 	session.run(ctx, cancel)
+	h.log.Info("stream xulosasi",
+		"request_id", requestID,
+		"events", session.counts,
+		"challenge", session.lastChallenge,
+		"challenge_passed", session.challengePassed)
 }
 
 // streamSession — bitta WebSocket ulanishining holati.
@@ -198,6 +203,28 @@ type streamSession struct {
 	// movement has to be seen first.
 	challengeNonce  string
 	challengePassed bool
+
+	// Oqim xulosasi uchun: har bir hodisa turi (va xato kodi) necha marta
+	// yuborilgani, challenge oxirgi qaysi holatda qolgani. Yopilishda bitta
+	// qatorda yoziladi — odam qaysi bosqichda qiynalganini shundan ko'ramiz.
+	counts        map[string]int
+	lastChallenge usecase.ChallengeState
+}
+
+// emit — hodisani yuboradi va xulosa uchun sanaydi.
+func (s *streamSession) emit(evt event) bool {
+	if s.counts == nil {
+		s.counts = make(map[string]int)
+	}
+	key := evt.Type
+	if evt.Code != "" {
+		key += ":" + string(evt.Code)
+	}
+	s.counts[key]++
+	if evt.ChallengeState != "" {
+		s.lastChallenge = evt.ChallengeState
+	}
+	return s.handler.writeEvent(s.conn, evt)
 }
 
 func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
@@ -275,7 +302,7 @@ func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
 			// without it would silently downgrade the check the operator
 			// believes is running.
 			s.handler.log.Error("challenge berib bo'lmadi", "error", err)
-			s.handler.writeEvent(s.conn, event{
+			s.emit(event{
 				Type: "error", Code: domain.CodeInternal,
 				Message: "Tekshiruvni boshlab bo'lmadi. Qaytadan urinib ko'ring.",
 			})
@@ -285,7 +312,7 @@ func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
 		ready.Challenge = ch
 		ready.ChallengeState = usecase.ChallengeAwaitingCentre
 	}
-	s.handler.writeEvent(s.conn, ready)
+	s.emit(ready)
 
 	for {
 		select {
@@ -295,7 +322,7 @@ func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
 			cancel()
 			return
 		case <-streamErr:
-			s.handler.writeEvent(s.conn, event{Type: "error", Code: domain.CodeAIUnavailable,
+			s.emit(event{Type: "error", Code: domain.CodeAIUnavailable,
 				Message: "AI servis oqimi uzildi."})
 			return
 		case <-ticker.C:
@@ -331,14 +358,14 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 			evt.Type = "spoof"
 			evt.Liveness = result.Err.Liveness
 		}
-		return s.handler.writeEvent(s.conn, evt)
+		return s.emit(evt)
 	}
 
 	// --- Tirik emas ---
 	if result.Liveness == nil || !result.Liveness.IsReal {
 		s.liveStreak = 0
 		s.wantEmbedding.Store(false)
-		return s.handler.writeEvent(s.conn, event{
+		return s.emit(event{
 			Type: "spoof", FrameID: result.FrameID,
 			Liveness: result.Liveness, BBox: &result.Face.BBox,
 			ProcessingMs: result.ProcessingMs,
@@ -361,7 +388,7 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 			// Muddat tugadi: yangi buyruq berish o'rniga oqim to'xtatiladi.
 			// Cheksiz qayta urinish hujumchiga kerakli buyruq chiqquncha
 			// kutish imkonini berardi.
-			s.handler.writeEvent(s.conn, event{
+			s.emit(event{
 				Type: "error", FrameID: result.FrameID,
 				Code:           domain.CodeSpoofDetected,
 				Message:        "Tekshiruv muddati tugadi. Sahifani yangilab, qaytadan urinib ko'ring.",
@@ -372,7 +399,7 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 			// Hali bajarilmadi — foydalanuvchiga holatni ko'rsatamiz va
 			// vektorni SO'RAMAYMIZ.
 			s.wantEmbedding.Store(false)
-			return s.handler.writeEvent(s.conn, event{
+			return s.emit(event{
 				Type: "liveness", FrameID: result.FrameID,
 				Liveness: result.Liveness, BBox: &result.Face.BBox,
 				Pose: result.Face.Pose, ChallengeState: state,
@@ -396,7 +423,7 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 		s.wantEmbedding.Store(true)
 	}
 
-	return s.handler.writeEvent(s.conn, event{
+	return s.emit(event{
 		Type: "liveness", FrameID: result.FrameID,
 		Liveness: result.Liveness, BBox: &result.Face.BBox,
 		ProcessingMs: result.ProcessingMs,
@@ -420,7 +447,7 @@ func (s *streamSession) matchAndReport(ctx context.Context, result *domain.Frame
 				evt.Code = domainErr.Code
 				evt.Message = domainErr.Message
 			}
-			s.handler.writeEvent(s.conn, evt)
+			s.emit(evt)
 			return false
 		}
 		// Ishlatildi — ikkinchi marta tekshirilmaydi.
@@ -443,10 +470,10 @@ func (s *streamSession) matchAndReport(ctx context.Context, result *domain.Frame
 			evt.Code = domain.CodeInternal
 			evt.Message = "Ichki xatolik."
 		}
-		return s.handler.writeEvent(s.conn, evt)
+		return s.emit(evt)
 	}
 
-	return s.handler.writeEvent(s.conn, event{
+	return s.emit(event{
 		Type:         "recognized",
 		FrameID:      result.FrameID,
 		PersonID:     verification.Person.ID,

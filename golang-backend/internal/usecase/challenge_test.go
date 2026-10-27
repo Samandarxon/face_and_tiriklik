@@ -228,6 +228,30 @@ func TestSlowCentreStillHasFullActionWindow(t *testing.T) {
 	}
 }
 
+// Umumiy oynaning oxirida bajarilgan harakat: tanish kadri ChallengeTTL dan
+// keyin kelsa ham qabul qilinishi kerak — aks holda to'g'ri bajargan odamning
+// oqimi yopilib, ekranda "ishlamayapti" chiqardi.
+func TestPassedAtEndOfWindowIsStillConsumable(t *testing.T) {
+	s, advance := testStore()
+
+	ch, _ := s.Issue()
+	turn := -30.0
+	if ch.Action == ChallengeTurnRight {
+		turn = 30.0
+	}
+
+	advance(ChallengeTTL - 3*time.Second)
+	s.Observe(ch.Nonce, pose(0))
+	advance(2 * time.Second)
+	if got := s.Observe(ch.Nonce, pose(turn)); got != ChallengePassed {
+		t.Fatalf("passed kutilgan, olindi: %s", got)
+	}
+	advance(ChallengeConsumeGrace - time.Second) // umumiy oyna o'tdi
+	if err := s.Consume(ch.Nonce); err != nil {
+		t.Fatalf("bajarilgan buyruq rad etildi: %v", err)
+	}
+}
+
 // Markazdan keyin harakat oynasi o'tib ketsa — umumiy muddat qolgan bo'lsa ham
 // rad etiladi.
 func TestActionWindowExpiresAfterCentre(t *testing.T) {

@@ -81,7 +81,19 @@ type Challenge struct {
 	actionDeadline time.Time
 	// done — harakat bajarildimi.
 	done bool
+	// doneAt — harakat qayd etilgan payt; Consume oynasi shundan sanaladi.
+	doneAt time.Time
 }
+
+// ChallengeConsumeGrace — harakat bajarilgandan keyin tanish kadri kelishi
+// uchun beriladigan vaqt.
+//
+// Bajarilgan buyruq umumiy ChallengeTTL ga emas, shu oynaga qarab baholanadi.
+// Aks holda oynaning oxirida bajarilgan harakat tanish kadri kelguncha
+// "muddati o'tgan" bo'lib qolardi — odam hamma narsani to'g'ri qilgan bo'lsa
+// ham oqim yopilardi va ekranda "ishlamayapti" chiqardi. Oyna qisqa: harakat
+// bilan tanish orasida kadrni almashtirishga vaqt qolmasligi kerak.
+const ChallengeConsumeGrace = 8 * time.Second
 
 // Muddat ikki qismdan iborat.
 //
@@ -181,7 +193,7 @@ func (s *ChallengeStore) Observe(nonce string, pose *domain.HeadPose) ChallengeS
 	if !ok {
 		return ChallengeUnknown
 	}
-	if s.now().After(ch.ExpiresAt) {
+	if ch.expired(s.now()) {
 		delete(s.items, nonce)
 		return ChallengeExpired
 	}
@@ -214,6 +226,7 @@ func (s *ChallengeStore) Observe(nonce string, pose *domain.HeadPose) ChallengeS
 
 	if actionSatisfied(ch.Action, pose.Yaw) {
 		ch.done = true
+		ch.doneAt = s.now()
 		return ChallengePassed
 	}
 	return ChallengeAwaitingAction
@@ -234,15 +247,29 @@ func (s *ChallengeStore) Consume(nonce string) error {
 	}
 	delete(s.items, nonce)
 
-	if s.now().After(ch.ExpiresAt) {
-		return domain.NewError(domain.CodeInvalidInput,
-			"Tekshiruv muddati tugadi. Qaytadan urinib ko'ring.")
-	}
 	if !ch.done {
+		if s.now().After(ch.ExpiresAt) {
+			return domain.NewError(domain.CodeInvalidInput,
+				"Tekshiruv muddati tugadi. Qaytadan urinib ko'ring.")
+		}
 		return domain.NewError(domain.CodeSpoofDetected,
 			"So'ralgan harakat bajarilmadi.")
 	}
+	if s.now().After(ch.doneAt.Add(ChallengeConsumeGrace)) {
+		return domain.NewError(domain.CodeInvalidInput,
+			"Tekshiruv muddati tugadi. Qaytadan urinib ko'ring.")
+	}
 	return nil
+}
+
+// expired — buyruqni o'chirish vaqti keldimi. Bajarilgani Consume oynasi
+// tugaguncha saqlanadi: GC uni tanish kadri kelishidan oldin o'chirib
+// yuborsa, to'g'ri bajarilgan urinish "topilmadi" bilan yopilardi.
+func (ch *Challenge) expired(now time.Time) bool {
+	if ch.done {
+		return now.After(ch.doneAt.Add(ChallengeConsumeGrace))
+	}
+	return now.After(ch.ExpiresAt)
 }
 
 // actionSatisfied — yaw buyruqqa mos keladimi.
@@ -300,7 +327,7 @@ func (s *ChallengeStore) collectGarbage() {
 			now := s.now()
 			s.mu.Lock()
 			for nonce, ch := range s.items {
-				if now.After(ch.ExpiresAt) {
+				if ch.expired(now) {
 					delete(s.items, nonce)
 				}
 			}
