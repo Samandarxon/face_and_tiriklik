@@ -78,7 +78,6 @@ func newIdentityFixture(t *testing.T) *identityFixture {
 	return &identityFixture{s: s, client: client, repo: repo}
 }
 
-
 func person(hot int) domain.Embedding {
 	e := make(domain.Embedding, 8)
 	e[hot] = 1
