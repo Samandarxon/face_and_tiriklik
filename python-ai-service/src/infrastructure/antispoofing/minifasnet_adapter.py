@@ -26,6 +26,7 @@ import torch.nn.functional as F
 from ...domain.entities import BoundingBox, LivenessResult
 from .crop import crop_face
 from .networks import MODEL_MAPPING
+from ..model_integrity import verify_file
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,9 @@ class MiniFASNetChecker:
             raise ValueError(f"Noma'lum MiniFASNet arxitekturasi: {spec.arch}")
 
         model = factory(conv6_kernel=spec.kernel).to(self.device)
+        # Xesh torch.load DAN OLDIN: almashtirilgan .pth yuklanishning o'zida
+        # kod bajarishi mumkin (CVE-2025-32434).
+        verify_file(spec.path)
         state_dict = torch.load(spec.path, map_location=self.device, weights_only=True)
 
         # DataParallel bilan saqlangan checkpoint'larda `module.` prefiksi bo'ladi.

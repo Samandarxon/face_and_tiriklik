@@ -13,6 +13,7 @@ from ..domain.entities import HeadPose as DomainHeadPose
 from ..domain.errors import ModelNotReadyError
 from . import headpose
 from .device import DeviceSelection
+from .model_integrity import verify_dir
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,12 @@ class InsightFaceDetector:
 
         logger.info("InsightFace '%s' yuklanmoqda (device=%s, providers=%s)...",
                     self._model_name, self._device.name, self._device.providers)
+
+        pack = os.path.join(os.path.expanduser(self._model_root), "models", self._model_name)
+        if os.path.isdir(pack):
+            # FaceAnalysis katalogdagi HAR bir .onnx ni yuklaydi — shuning uchun
+            # hammasi tekshiriladi, faqat ishlatiladiganlari emas.
+            verify_dir(pack, ".onnx")
 
         app = FaceAnalysis(
             name=self._model_name,

@@ -34,8 +34,18 @@ for model in "${MODELS[@]}"; do
     echo "XATO: $model to'liq yuklanmadi. Tarmoqni tekshiring." >&2
     exit 1
   fi
+  # Xesh tekshiruvi: master branch'dan olinadi, ya'ni fayl o'zgarishi mumkin.
+  # Mos kelmasa — o'rnatilmaydi (servis ham uni yuklamaydi, qarang
+  # src/infrastructure/model_integrity.py).
+  want="$(python3 -c "import sys;sys.path.insert(0,'$SCRIPT_DIR/..');from src.infrastructure.model_integrity import KNOWN_SHA256 as K;print(K['$model'])")"
+  got="$(sha256sum "$dest.tmp" | cut -d' ' -f1)"
+  if [[ "$want" != "$got" ]]; then
+    rm -f "$dest.tmp"
+    echo "XATO: $model SHA-256 mos kelmadi — fayl o'rnatilmadi." >&2
+    exit 1
+  fi
   mv "$dest.tmp" "$dest"
-  echo "[ok  ] $model"
+  echo "[ok  ] $model (sha256 tasdiqlandi)"
 done
 
 echo
