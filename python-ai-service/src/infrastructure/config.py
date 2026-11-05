@@ -60,6 +60,11 @@ class Settings:
     insightface_model: str = field(default_factory=lambda: _env_str("INSIGHTFACE_MODEL", "buffalo_l"))
     insightface_root: str = field(default_factory=lambda: _env_str("INSIGHTFACE_ROOT", "/root/.insightface"))
     det_size: int = field(default_factory=lambda: _env_int("DET_SIZE", 640))
+    # Oqimda bir nechta yuz bo'lsa, eng kattasi keyingisidan shuncha baravar katta
+    # (maydon bo'yicha) bo'lgandagina olinadi. 0 — bir nechta yuz doim rad etiladi.
+    stream_dominant_face_ratio: float = field(
+        default_factory=lambda: _env_float("STREAM_DOMINANT_FACE_RATIO", 2.0)
+    )
 
     # ONNX Runtime oqimlari soni (bitta inference uchun).
     #

@@ -190,7 +190,10 @@ func (h *StreamHandler) Handle(c *gin.Context) {
 		"request_id", requestID,
 		"events", session.counts,
 		"challenge", session.lastChallenge,
-		"challenge_passed", session.challengePassed)
+		"challenge_passed", session.challengePassed,
+		"action", session.lastAction,
+		"yaw_min", round4(session.yawMin),
+		"yaw_max", round4(session.yawMax))
 	session.abandonPassive()
 }
 
@@ -226,6 +229,11 @@ type streamSession struct {
 	// passive — buyruqsiz bosqich davom etayotganini bildiradi. Bu paytda ham
 	// tanish TO'SIQ ORTIDA: u nil bo'lganda yo challenge berilgan, yo o'tilgan.
 	passive *usecase.PassiveEvaluator
+
+	// Buyruq bajarilmay qolganda sababni ko'rish uchun: nima so'ralgan va bosh
+	// qaysi oraliqda burilgan. Oqim xulosasiga yoziladi.
+	lastAction     usecase.ChallengeAction
+	yawMin, yawMax float64
 
 	// Oqim xulosasi uchun: har bir hodisa turi (va xato kodi) necha marta
 	// yuborilgani, challenge oxirgi qaysi holatda qolgani. Yopilishda bitta
@@ -340,6 +348,7 @@ func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
 			return
 		}
 		s.challengeNonce = ch.Nonce
+		s.lastAction = ch.Action
 		s.track = usecase.NewIdentityTrack(s.handler.continuity)
 		// Challenge davomidagi HAR bir kadr vektor bilan so'raladi: harakat
 		// bajarilgan kadr ham shaxsga bog'lanishi kerak.
@@ -444,6 +453,10 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 		}
 		if !s.track.Same(result.Face.Embedding) {
 			return s.identityChanged(result)
+		}
+		if pose := result.Face.Pose; pose != nil && pose.Available {
+			s.yawMin = math.Min(s.yawMin, pose.Yaw)
+			s.yawMax = math.Max(s.yawMax, pose.Yaw)
 		}
 		state := s.handler.challenges.Observe(s.challengeNonce, result.Face.Pose)
 
@@ -568,6 +581,7 @@ func (s *streamSession) leavePassive(result *domain.FrameResult) bool {
 		return false
 	}
 	s.challengeNonce = ch.Nonce
+	s.lastAction = ch.Action
 	s.wantEmbedding.Store(true)
 	// Yana `ready`: eski mijozlar buyruqni faqat shu hodisadan o'qiydi, yangi
 	// hodisa turi ularda buyruqsiz qolib ketardi.

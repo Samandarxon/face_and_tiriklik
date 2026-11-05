@@ -230,7 +230,7 @@ class FaceServicer(face_pb2_grpc.FaceServiceServicer):
 
         try:
             frame = await run_io(container.decoder.decode, request.image)
-            analysis = await run_inference(container.verify_frame.execute, frame)
+            analysis = await run_inference(container.verify_stream_frame.execute, frame)
             face, liveness = analysis.face, analysis.liveness
         except AIServiceError as exc:
             response.ok = False

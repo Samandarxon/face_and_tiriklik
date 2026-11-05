@@ -52,6 +52,7 @@ class Container:
         # Use-case'lar `load()` dan keyin to'ldiriladi.
         self.embed_face: EmbedFace
         self.verify_frame: VerifyFrame
+        self.verify_stream_frame: VerifyFrame
         self.probe_liveness: ProbeLiveness
 
     # ------------------------------------------------------------------ load
@@ -77,6 +78,15 @@ class Container:
 
         self.embed_face = EmbedFace(extract)
         self.verify_frame = VerifyFrame(extract, liveness)
+        # Faqat jonli oqim: ro'yxatga olish va bir martalik so'rovlar qat'iy qoladi.
+        self.verify_stream_frame = VerifyFrame(
+            ExtractFace(
+                detector=self._detector,
+                quality=self._quality,
+                dominant_ratio=self.settings.stream_dominant_face_ratio,
+            ),
+            liveness,
+        )
         self.probe_liveness = ProbeLiveness(extract, liveness)
 
     def _load_liveness(self) -> None:

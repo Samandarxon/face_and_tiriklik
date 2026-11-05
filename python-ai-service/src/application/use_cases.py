@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import logging
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 
@@ -30,29 +30,48 @@ class ExtractFace:
 
     Bir nechta yuz — rad etiladi: autentifikatsiyada kadrda kim borligi
     aniq bo'lishi shart, aks holda begona odamning yuzi ishlatilishi mumkin.
+
+    `dominant_ratio` > 0 bo'lsa, bir nechta yuz ichidan kameraga eng yaqini olinadi,
+    lekin faqat uning maydoni keyingisidan shuncha baravar katta bo'lsa: yuzlar
+    deyarli teng bo'lsa kim kirayotgani noaniq, shuning uchun rad etiladi.
+    Standart 0 — doim rad etish; ro'yxatga olishda aynan shu kerak.
     """
 
-    def __init__(self, detector: FaceDetector, quality: QualityInspector) -> None:
+    def __init__(
+        self,
+        detector: FaceDetector,
+        quality: QualityInspector,
+        *,
+        dominant_ratio: float = 0.0,
+    ) -> None:
         self._detector = detector
         self._quality = quality
+        self._dominant_ratio = dominant_ratio
 
     def execute(self, image: np.ndarray, *, check_quality: bool = True) -> DetectedFace:
         faces = self._detector.detect(image)
 
         if not faces:
             raise NoFaceDetectedError("Rasmda yuz aniqlanmadi. Yuzingiz kameraga to'liq ko'rinsin.")
-        if len(faces) > 1:
+        face = faces[0] if len(faces) == 1 else self._dominant(faces)
+        if face is None:
             raise MultipleFacesError(
                 f"Rasmda {len(faces)} ta yuz aniqlandi. Kadrda faqat bitta inson bo'lishi kerak.",
                 {"faces_found": len(faces)},
             )
 
-        face = faces[0]
         if check_quality:
             # O'lchangan qiymatlar yuzga biriktiriladi: yuqoridagi qatlam
             # o'z, qattiqroq darvozasini qo'yishi uchun ularni ko'rishi kerak.
             face = replace(face, quality=self._quality.inspect(image, face.bbox))
         return face
+
+    def _dominant(self, faces: List[DetectedFace]) -> Optional[DetectedFace]:
+        if self._dominant_ratio <= 0:
+            return None
+        ranked = sorted(faces, key=lambda f: f.bbox.width * f.bbox.height, reverse=True)
+        first, second = (f.bbox.width * f.bbox.height for f in ranked[:2])
+        return ranked[0] if first >= second * self._dominant_ratio else None
 
 
 class CheckLiveness:
