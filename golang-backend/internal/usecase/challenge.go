@@ -168,6 +168,9 @@ func (s *ChallengeStore) Issue() (*Challenge, error) {
 type ChallengeState string
 
 const (
+	// ChallengePassive — buyruqsiz passiv bosqich (LIVENESS_PASSIVE_FIRST).
+	// Buyruq hali berilmagan; ishonch yetmasa keyin beriladi.
+	ChallengePassive ChallengeState = "passive"
 	// ChallengeAwaitingCentre — avval markazga qarash kerak.
 	ChallengeAwaitingCentre ChallengeState = "awaiting_centre"
 	// ChallengeAwaitingAction — markaz ko'rildi, endi buyruqni bajarish kerak.

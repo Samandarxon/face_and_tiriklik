@@ -56,6 +56,10 @@ func (t *IdentityTrack) Same(e domain.Embedding) bool {
 	return cosine(t.anchor, e) >= t.threshold
 }
 
+// Reset — langarni tashlaydi: keyingi vektor yangi langar bo'ladi. Faqat hali
+// hech narsa tasdiqlanmagan passiv bosqichda chaqiriladi.
+func (t *IdentityTrack) Reset() { t.anchor = nil }
+
 // Anchored — langar o'rnatilganmi.
 func (t *IdentityTrack) Anchored() bool { return t.anchor != nil }
 

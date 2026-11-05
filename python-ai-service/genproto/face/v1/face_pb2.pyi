@@ -101,14 +101,16 @@ class HeadPose(_message.Message):
     def __init__(self, yaw: _Optional[float] = ..., pitch: _Optional[float] = ..., roll: _Optional[float] = ..., available: bool = ...) -> None: ...
 
 class FaceInfo(_message.Message):
-    __slots__ = ("bbox", "det_score", "pose")
+    __slots__ = ("bbox", "det_score", "pose", "landmarks")
     BBOX_FIELD_NUMBER: _ClassVar[int]
     DET_SCORE_FIELD_NUMBER: _ClassVar[int]
     POSE_FIELD_NUMBER: _ClassVar[int]
+    LANDMARKS_FIELD_NUMBER: _ClassVar[int]
     bbox: BoundingBox
     det_score: float
     pose: HeadPose
-    def __init__(self, bbox: _Optional[_Union[BoundingBox, _Mapping]] = ..., det_score: _Optional[float] = ..., pose: _Optional[_Union[HeadPose, _Mapping]] = ...) -> None: ...
+    landmarks: _containers.RepeatedScalarFieldContainer[float]
+    def __init__(self, bbox: _Optional[_Union[BoundingBox, _Mapping]] = ..., det_score: _Optional[float] = ..., pose: _Optional[_Union[HeadPose, _Mapping]] = ..., landmarks: _Optional[_Iterable[float]] = ...) -> None: ...
 
 class ImageRequest(_message.Message):
     __slots__ = ("image", "request_id")

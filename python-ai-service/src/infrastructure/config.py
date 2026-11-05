@@ -98,6 +98,11 @@ class Settings:
     # Model yuklanmasa: True -> so'rovni rad etamiz (fail-closed, xavfsiz standart).
     liveness_fail_closed: bool = field(default_factory=lambda: _env_bool("LIVENESS_FAIL_CLOSED", True))
 
+    # Passiv-birinchi liveness (LIVENESS_PASSIVE_FIRST). Qarorni Golang chiqaradi;
+    # bu yerda u faqat 106 nuqtali modelni (2d106det, buffalo_l ichida) yoqadi.
+    # Nega flag ostida: model har bir yuz uchun qo'shimcha inference qiladi.
+    dense_landmarks: bool = field(default_factory=lambda: _env_bool("LIVENESS_PASSIVE_FIRST", False))
+
     # --- Embedding ---
     embedding_dim: int = field(default_factory=lambda: _env_int("EMBEDDING_DIM", 512))
 

@@ -48,6 +48,14 @@ type Face struct {
 	Embedding Embedding   `json:"-"`
 	// Pose — boshning burilishi. Aktiv liveness uchun; passiv oqimlarda nil.
 	Pose *HeadPose `json:"pose,omitempty"`
+	// Landmarks — zich nuqtalar. Faqat passiv-birinchi liveness uchun; tashqariga
+	// chiqmaydi (javob hajmi va hujumchi uchun foydali geometriya).
+	Landmarks []Point `json:"-"`
+}
+
+// Point — kadrdagi nuqta (piksel).
+type Point struct {
+	X, Y float64
 }
 
 // HeadPose — boshning fazodagi burilishi (gradus).

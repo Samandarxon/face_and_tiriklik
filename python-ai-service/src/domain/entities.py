@@ -77,6 +77,8 @@ class DetectedFace:
     # Normallashtirilmagan vektor uzunligi — MagFace uslubidagi sifat
     # signali. 0 = o'lchanmagan.
     embedding_norm: float = 0.0
+    # Zich nuqtalar (N, 2) — faqat passiv-birinchi liveness yoqilganda.
+    landmarks: Optional[np.ndarray] = None
 
     @property
     def embedding_dim(self) -> int:

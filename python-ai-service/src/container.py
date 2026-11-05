@@ -43,6 +43,7 @@ class Container:
             device=self.device,
             expected_dim=settings.embedding_dim,
             intra_op_threads=settings.ort_intra_op_threads,
+            dense_landmarks=settings.dense_landmarks,
         )
 
         self._checker: Optional[MiniFASNetChecker] = None

@@ -92,6 +92,7 @@ class InsightFaceDetector:
         device: DeviceSelection,
         expected_dim: int,
         intra_op_threads: int = 0,
+        dense_landmarks: bool = False,
     ) -> None:
         self._model_name = model_name
         self._model_root = model_root
@@ -100,6 +101,7 @@ class InsightFaceDetector:
         self._device = device
         self._expected_dim = expected_dim
         self._intra_op_threads = intra_op_threads
+        self._dense_landmarks = dense_landmarks
         self._app = None
 
     def load(self) -> None:
@@ -114,11 +116,18 @@ class InsightFaceDetector:
             # hammasi tekshiriladi, faqat ishlatiladiganlari emas.
             verify_dir(pack, ".onnx")
 
+        modules = ["detection", "recognition"]
+        if self._dense_landmarks:
+            # Nega 3D-68 emas: uning chuqurligi yuz haqidagi o'rganilgan taxmin,
+            # suratga ham "chuqurlik" chizib beradi. 2D nuqtalar esa kadrda
+            # ko'ringan narsani kuzatadi — tekislik testiga shu kerak.
+            modules.append("landmark_2d_106")
+
         app = FaceAnalysis(
             name=self._model_name,
             root=self._model_root,
             providers=self._device.providers,
-            allowed_modules=["detection", "recognition"],
+            allowed_modules=modules,
         )
         app.prepare(ctx_id=self._device.ctx_id, det_size=(self._det_size, self._det_size))
         if not self._device.is_gpu:
@@ -181,6 +190,8 @@ class InsightFaceDetector:
             # e'tiborsiz qoldiradi.
             pose = headpose.estimate(getattr(raw, "kps", None))
 
+            dense = getattr(raw, "landmark_2d_106", None) if self._dense_landmarks else None
+
             faces.append(DetectedFace(
                 bbox=bbox,
                 det_score=float(raw.det_score),
@@ -190,6 +201,7 @@ class InsightFaceDetector:
                     yaw=pose.yaw, pitch=pose.pitch, roll=pose.roll,
                     available=pose.available,
                 ),
+                landmarks=None if dense is None else np.asarray(dense, dtype=np.float32),
             ))
 
         return faces

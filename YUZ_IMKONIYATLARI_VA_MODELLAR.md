@@ -127,6 +127,59 @@ func TestVerifyStopsAtSpoofAndNeverSearches(t *testing.T) {
 }
 ```
 
+### 2.2.1 Passiv-birinchi tekshiruv — bir qarashda (`LIVENESS_PASSIVE_FIRST`)
+
+Standart o'chiq. Yoqilganda oqim buyruqsiz boshlanadi: odam kameraga qaraydi, server
+bir necha kadrda ishonch hosil qilsa darhol tanishga o'tadi; ishonch yetmasa — faqat
+shunda — tasodifiy "boshni bur" buyrug'i beriladi. Qarorni faqat server chiqaradi,
+mijoz kadr yuborishdan boshqa narsa qila olmaydi.
+
+**Model:** `2d106det` (buffalo_l ichida, 106 ta 2D nuqta, ~2 ms/yuz CPU). 3D-68 ataylab
+ishlatilmaydi: uning chuqurligi o'rganilgan taxmin va suratga ham "chuqurlik" chizadi.
+
+**O'tish sharti** (bitta odamning kadrlarida, hammasi birga):
+
+| Shart | Standart | Nima uchun |
+|---|---|---|
+| Ikkala MiniFASNet ham, yuz frontal, detektor ishonchli | `MIN_FRAMES=6`, `MIN_SCORE=0.90` | Bitta kadr bali dalil emas: oddiy surat 0.89 olgan |
+| Yetarli harakat | `MIN_MOTION=0.02` | O'xshashlikdan keyingi harakat; kam bo'lsa test hech narsani isbotlamaydi |
+| Gomografiya tushuntira olmaydi | `MIN_RESIDUAL=0.012`, `MIN_NONPLANAR=0.70` | Tekislik har qanday qimirlashda bitta gomografiyaga tushadi |
+| Epipolar geometriya tushuntiradi | `MAX_EPIPOLAR=0.25` | Qattiq 3D jism shartga bo'ysunadi, nuqtalar titrashi bo'ysunmaydi |
+
+Dalil har qanday bitta kadr olib tashlanganda ham saqlanishi shart. Vaqt (`BUDGET_MS=2500`)
+birinchi yuz kadridan sanaladi; tugasa yoki noaniq bo'lsa — buyruq beriladi, `ACTIVE_LIVENESS_ENABLED=false`
+bo'lsa rad etiladi. O'tish hech qachon sukut bo'yicha emas. Keyingi yo'l o'zgarmaydi:
+tanish kadri o'sha odamga bog'langan (`IdentityTrack`), `login_grant` bir martalik.
+
+**Protokol:** `ready.challenge_state = "passive"`, kadrlarda `challenge_state: "passive"` va
+`passive_progress`. Ishonch yetmasa server buyruq bilan yana `ready` yuboradi — eski mijozlar
+ham uni o'qiydi. Flag o'chiq bo'lsa hodisalar avvalgidek.
+
+**Nimani to'smaydi — ochiq aytiladi:**
+
+- **Ekrandagi yozib olingan video.** "Ekran ham tekislik, demak yiqiladi" — noto'g'ri. Test
+  jismni emas, nuqtalar harakatini ko'radi: yozuvda bosh burilgan bo'lsa, parallaks kontentning
+  o'zida bor va bitta gomografiya (ekran qiyaligi) uni yo'qotmaydi (`TestPlanarityCannotSeeReplayedVideo`).
+  Buyruqli yo'lda replay'ni tasodifiy buyruq to'sadi; bu yo'lda uni **faqat MiniFASNet** to'sadi.
+  Bu flag yoqilganda qabul qilinadigan asosiy xavf.
+- Real vaqtdagi deepfake va fotodan jonlantirilgan video — xuddi shu sabab.
+- 3D niqob; kuchli egilgan yoki yuzga yopishtirilgan qog'oz (3 sm egilish sintetik o'lchovda o'tmadi,
+  lekin kafolat yo'q).
+
+**Holat: chegaralar KALIBRLANMAGAN.** Tekis yuza 2d106det'ning haqiqiy chiqishida o'lchangan
+(namunaviy suratning 6 yuzi, 168 ketma-ketlik: 0 tasi o'tdi), lekin bu sintetik aylantirish, bosma
+yoki telefon emas. Tirik odam faqat 3D model bilan taxmin qilingan: ±2.5° (5° diapazon) va undan
+katta qimirlashda ko'pincha o'tadi, 2–3° dan kamida buyruqqa boradi. Yoqishdan oldin real kamerada solishtiring:
+
+```bash
+docker compose logs -f backend | grep "passiv liveness"
+# decision reason frames_good min_score motion_max residual nonplanar epipolar pairs elapsed_ms
+```
+
+Tirik odam, telefondagi surat, qog'oz va telefondagi videoni kamida 10 martadan sinang. `epipolar` va
+`nonplanar` guruhlarni ajratmasa, flagni yoqmang. Tasvir va PNFL logga yozilmaydi.
+Fixture: `python-ai-service/scripts/passive_flat_fixture.py`.
+
 ---
 
 ### 2.3 Face Recognition (1:N) — "bu kim?"

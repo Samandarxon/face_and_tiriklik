@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"log/slog"
+	"math"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -63,6 +64,8 @@ type StreamHandler struct {
 	// continuity — challenge va tanish kadrlari bir odamga tegishli
 	// ekanini tekshirish chegarasi (usecase.IdentityTrack).
 	continuity float32
+	// passive — bir qarashda tekshiruv. Enabled=false bo'lsa oqim avvalgidek.
+	passive usecase.PassiveConfig
 }
 
 func NewStreamHandler(
@@ -116,6 +119,8 @@ type event struct {
 	Challenge      *usecase.Challenge     `json:"challenge,omitempty"`
 	ChallengeState usecase.ChallengeState `json:"challenge_state,omitempty"`
 	Pose           *domain.HeadPose       `json:"pose,omitempty"`
+	// PassiveProgress — passiv bosqichdagi taraqqiyot (0..1), faqat UI uchun.
+	PassiveProgress float64 `json:"passive_progress,omitempty"`
 
 	PersonID string  `json:"person_id,omitempty"`
 	Name     string  `json:"name,omitempty"`
@@ -186,11 +191,15 @@ func (h *StreamHandler) Handle(c *gin.Context) {
 		"events", session.counts,
 		"challenge", session.lastChallenge,
 		"challenge_passed", session.challengePassed)
+	session.abandonPassive()
 }
 
 // SetContinuityThreshold — challenge va tanish kadrlari bir odamga tegishli
 // ekanini tekshirish chegarasi. 0 — usecase.DefaultContinuityThreshold.
 func (h *StreamHandler) SetContinuityThreshold(t float32) { h.continuity = t }
+
+// SetPassiveLiveness — buyruqsiz passiv-birinchi tekshiruv sozlamalari.
+func (h *StreamHandler) SetPassiveLiveness(cfg usecase.PassiveConfig) { h.passive = cfg }
 
 // streamSession — bitta WebSocket ulanishining holati.
 type streamSession struct {
@@ -213,6 +222,10 @@ type streamSession struct {
 	// track — challenge'ni bajargan odam bilan tanilayotgan odam bir
 	// ekanini kafolatlaydi. challengeNonce bilan birga o'rnatiladi.
 	track *usecase.IdentityTrack
+
+	// passive — buyruqsiz bosqich davom etayotganini bildiradi. Bu paytda ham
+	// tanish TO'SIQ ORTIDA: u nil bo'lganda yo challenge berilgan, yo o'tilgan.
+	passive *usecase.PassiveEvaluator
 
 	// Oqim xulosasi uchun: har bir hodisa turi (va xato kodi) necha marta
 	// yuborilgani, challenge oxirgi qaysi holatda qolgani. Yopilishda bitta
@@ -305,7 +318,15 @@ func (s *streamSession) run(ctx context.Context, cancel context.CancelFunc) {
 	// the ticket, say — would give an attacker the extra round trip they need
 	// to look up or generate matching footage.
 	ready := event{Type: "ready"}
-	if s.handler.challenges != nil {
+	if s.handler.passive.Enabled {
+		// Buyruq hozircha BERILMAYDI: agar kerak bo'lsa, vaqti kelganda yangi
+		// tasodifiy buyruq chiqadi. Oldindan berilsa, hujumchi uni kutib turgan
+		// paytida javob tayyorlashga vaqt olardi.
+		s.track = usecase.NewIdentityTrack(s.handler.continuity)
+		s.passive = usecase.NewPassiveEvaluator(s.handler.passive, s.track)
+		s.wantEmbedding.Store(true)
+		ready.ChallengeState = usecase.ChallengePassive
+	} else if s.handler.challenges != nil {
 		ch, err := s.handler.challenges.Issue()
 		if err != nil {
 			// Fail closed. Active liveness is configured on, so running
@@ -358,7 +379,8 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 	// --- Kadr darajasidagi xato: oqim UZILMAYDI ---
 	if !result.OK() {
 		s.liveStreak = 0
-		s.wantEmbedding.Store(false)
+		// Passiv bosqichda har bir kadr vektor bilan kerak (shaxsni kuzatish).
+		s.wantEmbedding.Store(s.passive != nil)
 
 		evt := event{
 			Type:         "error",
@@ -372,18 +394,35 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 			evt.Type = "spoof"
 			evt.Liveness = result.Err.Liveness
 		}
-		return s.emit(evt)
+		if !s.emit(evt) {
+			return false
+		}
+		if s.passive != nil && s.passive.ObserveError(result.Err.Code) == usecase.PassiveFallback {
+			return s.leavePassive(result)
+		}
+		return true
 	}
 
 	// --- Tirik emas ---
 	if result.Liveness == nil || !result.Liveness.IsReal {
 		s.liveStreak = 0
-		s.wantEmbedding.Store(false)
-		return s.emit(event{
+		s.wantEmbedding.Store(s.passive != nil)
+		if !s.emit(event{
 			Type: "spoof", FrameID: result.FrameID,
 			Liveness: result.Liveness, BBox: &result.Face.BBox,
 			ProcessingMs: result.ProcessingMs,
-		})
+		}) {
+			return false
+		}
+		if s.passive != nil && s.passive.ObserveError(domain.CodeSpoofDetected) == usecase.PassiveFallback {
+			return s.leavePassive(result)
+		}
+		return true
+	}
+
+	// --- Buyruqsiz passiv bosqich ---
+	if s.passive != nil {
+		return s.handlePassive(ctx, result)
 	}
 
 	// --- Tirik. Endi aktiv tekshiruv. ---
@@ -465,6 +504,110 @@ func (s *streamSession) handleResult(ctx context.Context, result *domain.FrameRe
 		ProcessingMs: result.ProcessingMs,
 	})
 }
+
+// handlePassive — passiv bosqichdagi tirik kadr.
+//
+// O'tilsa, tanish AYNAN shu kadrda bajariladi: u dalil oynasining o'zidan,
+// frontal va sifatli. Bazaga undan oldin murojaat qilinmaydi, keyingi yo'l esa
+// (matchAndReport, grant) challenge'dan keyingisi bilan bir xil.
+func (s *streamSession) handlePassive(ctx context.Context, result *domain.FrameResult) bool {
+	s.wantEmbedding.Store(true)
+	switch s.passive.Observe(usecase.PassiveFrame{Face: result.Face, Liveness: result.Liveness}) {
+	case usecase.PassivePassed:
+		s.logPassive("passed")
+		s.passive = nil
+		s.challengePassed = true
+		s.lastChallenge = usecase.ChallengePassed
+		s.wantEmbedding.Store(false)
+		s.liveStreak = 0
+		s.pausedUntil = time.Now().Add(verifyCooldown)
+		return s.matchAndReport(ctx, result)
+	case usecase.PassiveFallback:
+		return s.leavePassive(result)
+	default:
+		var pose *domain.HeadPose
+		if result.Face != nil {
+			pose = result.Face.Pose
+		}
+		return s.emit(event{
+			Type: "liveness", FrameID: result.FrameID,
+			Liveness: result.Liveness, BBox: faceBBox(result),
+			Pose: pose, ChallengeState: usecase.ChallengePassive,
+			PassiveProgress: s.passive.Progress(),
+			ProcessingMs:    result.ProcessingMs,
+		})
+	}
+}
+
+// leavePassive — passiv bosqich ishonch hosil qilmadi. Bu HECH QACHON o'tish
+// emas: challenge beriladi, u o'chiq bo'lsa oqim rad bilan yopiladi.
+func (s *streamSession) leavePassive(result *domain.FrameResult) bool {
+	if s.handler.challenges == nil {
+		s.logPassive("denied")
+		s.passive = nil
+		// Holat `expired`: mijoz bilan challenge muddati tugagandagi kelishuv —
+		// yangi ulanish bilan qayta urinadi, urinishlar soni cheklangan.
+		s.emit(event{
+			Type: "error", FrameID: result.FrameID,
+			Code:           domain.CodeSpoofDetected,
+			Message:        "Tirik inson tasdiqlanmadi. Qaytadan urinib ko'ring.",
+			ChallengeState: usecase.ChallengeExpired,
+		})
+		return false
+	}
+
+	s.logPassive("fallback")
+	s.passive = nil
+	ch, err := s.handler.challenges.Issue()
+	if err != nil {
+		s.handler.log.Error("challenge berib bo'lmadi", "error", err)
+		s.emit(event{
+			Type: "error", Code: domain.CodeInternal,
+			Message: "Tekshiruvni boshlab bo'lmadi. Qaytadan urinib ko'ring.",
+		})
+		return false
+	}
+	s.challengeNonce = ch.Nonce
+	s.wantEmbedding.Store(true)
+	// Yana `ready`: eski mijozlar buyruqni faqat shu hodisadan o'qiydi, yangi
+	// hodisa turi ularda buyruqsiz qolib ketardi.
+	return s.emit(event{
+		Type: "ready", Challenge: ch,
+		ChallengeState: usecase.ChallengeAwaitingCentre,
+	})
+}
+
+// abandonPassive — oqim passiv bosqichda yopildi (odam ketdi, suratni oldi).
+// Kalibrlash uchun bu urinishlar ham ko'rinishi kerak.
+func (s *streamSession) abandonPassive() {
+	if s.passive != nil && s.passive.Stats().Seen > 0 {
+		s.logPassive("abandoned")
+	}
+}
+
+// logPassive — urinish xulosasi: chegaralarni shu qatorlar bo'yicha sozlaymiz
+// (tirik odam, telefondagi surat, qog'oz). Tasvir va PNFL yozilmaydi.
+func (s *streamSession) logPassive(decision string) {
+	st := s.passive.Stats()
+	s.handler.metrics.PassiveDecision(decision)
+	s.handler.log.Info("stream: passiv liveness",
+		"request_id", s.requestID,
+		"decision", decision,
+		"reason", st.Reason,
+		"frames_seen", st.Seen,
+		"frames_good", st.Good,
+		"resets", st.Resets,
+		"restarts", st.Restarts,
+		"min_score", round4(st.MinScore),
+		"motion_max", round4(st.Planarity.MaxMotion),
+		"residual", round4(st.Planarity.Residual),
+		"nonplanar", round4(st.Planarity.Nonplanar),
+		"epipolar", round4(st.Planarity.Epipolar),
+		"pairs", st.Planarity.Pairs,
+		"elapsed_ms", st.Elapsed.Milliseconds())
+}
+
+func round4(v float64) float64 { return math.Round(v*1e4) / 1e4 }
 
 // identityChanged — challenge davomida kamera oldidagi odam almashdi.
 // Oqim yopiladi va buyruq bekor qilinadi: qayta urinish yangi ulanish va

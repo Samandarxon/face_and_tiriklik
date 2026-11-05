@@ -24,6 +24,7 @@ type Metrics struct {
 	streams    prometheus.Gauge
 	registry   *prometheus.Registry
 	authFailed *prometheus.CounterVec
+	passive    *prometheus.CounterVec
 }
 
 // NewMetrics — o'z registrini yasaydi (global holatga tegmaydi, shu tufayli
@@ -55,9 +56,13 @@ func NewMetrics() *Metrics {
 			Name: "face_auth_failures_total",
 			Help: "Rad etilgan autentifikatsiya urinishlari.",
 		}, []string{"reason"}),
+		passive: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "face_passive_liveness_total",
+			Help: "Passiv-birinchi bosqich qarorlari.",
+		}, []string{"decision"}),
 	}
 
-	reg.MustRegister(m.requests, m.duration, m.spoofs, m.streams, m.authFailed)
+	reg.MustRegister(m.requests, m.duration, m.spoofs, m.streams, m.authFailed, m.passive)
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
@@ -90,6 +95,13 @@ func (m *Metrics) AuthFailure(reason string) {
 		return
 	}
 	m.authFailed.WithLabelValues(reason).Inc()
+}
+
+// PassiveDecision — passiv bosqich qarori (passed | fallback | denied | abandoned).
+func (m *Metrics) PassiveDecision(decision string) {
+	if m != nil {
+		m.passive.WithLabelValues(decision).Inc()
+	}
 }
 
 // StreamOpened / StreamClosed — ochiq oqimlar hisobi.

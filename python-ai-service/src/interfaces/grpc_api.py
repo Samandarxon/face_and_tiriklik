@@ -246,6 +246,8 @@ class FaceServicer(face_pb2_grpc.FaceServiceServicer):
         if full:
             response.embedding.extend(face.embedding)
             response.embedding_dim = face.embedding_dim
+            if face.landmarks is not None:
+                response.face.landmarks.extend(face.landmarks.reshape(-1).tolist())
         return response
 
 

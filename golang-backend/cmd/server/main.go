@@ -176,6 +176,12 @@ func run(log *slog.Logger) error {
 	gin.SetMode(cfg.GinMode)
 	stream := httpapi.NewStreamHandler(analyzer, verifier, tickets, audit, metrics, cfg.CORSAllowOrigin, log, challenges)
 	stream.SetContinuityThreshold(cfg.ChallengeContinuity)
+	stream.SetPassiveLiveness(cfg.PassiveLiveness)
+	if cfg.PassiveLiveness.Enabled {
+		log.Info("passiv-birinchi liveness yoqilgan",
+			"budget", cfg.PassiveLiveness.Budget, "min_frames", cfg.PassiveLiveness.MinFrames,
+			"fallback_challenge", challenges != nil)
+	}
 	routerDeps := httpapi.Deps{
 		Person: httpapi.NewPersonHandler(
 			registrar, verifier, confirmer, probe, directory, resolver,

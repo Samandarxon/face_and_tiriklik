@@ -85,6 +85,8 @@ services:
       LIVENESS_THRESHOLD: ${LIVENESS_THRESHOLD:-0.75}
       LIVENESS_REQUIRE_UNANIMOUS: ${LIVENESS_REQUIRE_UNANIMOUS:-true}
       LIVENESS_FAIL_CLOSED: ${LIVENESS_FAIL_CLOSED:-true}
+      # Yoqilganda 106 nuqtali modelni yuklaydi; backend bilan bir xil qiymat.
+      LIVENESS_PASSIVE_FIRST: ${LIVENESS_PASSIVE_FIRST:-false}
 
       # --- Sifat filtri ---
       MIN_FACE_SIZE: ${MIN_FACE_SIZE:-80}
@@ -165,6 +167,15 @@ services:
       # Aktiv liveness (tasodifiy "boshni bur" buyrug'i). Yozib olingan
       # videoni faqat shu to'sadi; o'chirish — aniq qaror bo'lishi kerak.
       ACTIVE_LIVENESS_ENABLED: ${ACTIVE_LIVENESS_ENABLED:-true}
+      # Bir qarashda tekshiruv, ishonch yetmasa challenge. Sozlash: `.env.example`.
+      LIVENESS_PASSIVE_FIRST: ${LIVENESS_PASSIVE_FIRST:-false}
+      LIVENESS_PASSIVE_MIN_FRAMES: ${LIVENESS_PASSIVE_MIN_FRAMES:-6}
+      LIVENESS_PASSIVE_MIN_SCORE: ${LIVENESS_PASSIVE_MIN_SCORE:-0.90}
+      LIVENESS_PASSIVE_BUDGET_MS: ${LIVENESS_PASSIVE_BUDGET_MS:-2500}
+      LIVENESS_PASSIVE_MIN_MOTION: ${LIVENESS_PASSIVE_MIN_MOTION:-0.02}
+      LIVENESS_PASSIVE_MIN_RESIDUAL: ${LIVENESS_PASSIVE_MIN_RESIDUAL:-0.012}
+      LIVENESS_PASSIVE_MIN_NONPLANAR: ${LIVENESS_PASSIVE_MIN_NONPLANAR:-0.70}
+      LIVENESS_PASSIVE_MAX_EPIPOLAR: ${LIVENESS_PASSIVE_MAX_EPIPOLAR:-0.25}
 
       # --- Kirish nazorati ---
       POSTGRES_HOST: face-postgres

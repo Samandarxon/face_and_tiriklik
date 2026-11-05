@@ -263,6 +263,14 @@ func faceFromProto(info *facev1.FaceInfo, embedding []float32) *domain.Face {
 				Available: pose.GetAvailable(),
 			}
 		}
+		// Juft bo'lmagan uzunlik buzuq javob: nuqtalar yo'q deb hisoblanadi va
+		// passiv tekshiruv o'tmaydi.
+		if raw := info.GetLandmarks(); len(raw) > 0 && len(raw)%2 == 0 {
+			face.Landmarks = make([]domain.Point, len(raw)/2)
+			for i := range face.Landmarks {
+				face.Landmarks[i] = domain.Point{X: float64(raw[2*i]), Y: float64(raw[2*i+1])}
+			}
+		}
 		if bbox := info.GetBbox(); bbox != nil {
 			face.BBox = domain.BoundingBox{
 				X1: int(bbox.GetX1()), Y1: int(bbox.GetY1()),

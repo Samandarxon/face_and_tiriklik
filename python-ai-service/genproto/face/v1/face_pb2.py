@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12\x66\x61\x63\x65/v1/face.proto\x12\x07\x66\x61\x63\x65.v1\"\xc5\x01\n\tFaceError\x12 \n\x04\x63ode\x18\x01 \x01(\x0e\x32\x12.face.v1.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x30\n\x07\x64\x65tails\x18\x03 \x03(\x0b\x32\x1f.face.v1.FaceError.DetailsEntry\x12#\n\x08liveness\x18\x04 \x01(\x0b\x32\x11.face.v1.Liveness\x1a.\n\x0c\x44\x65tailsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"=\n\x0b\x42oundingBox\x12\n\n\x02x1\x18\x01 \x01(\x05\x12\n\n\x02y1\x18\x02 \x01(\x05\x12\n\n\x02x2\x18\x03 \x01(\x05\x12\n\n\x02y2\x18\x04 \x01(\x05\"\xc8\x01\n\x08Liveness\x12\x0f\n\x07is_real\x18\x01 \x01(\x08\x12\x18\n\x10real_probability\x18\x02 \x01(\x02\x12\x19\n\x11spoof_probability\x18\x03 \x01(\x02\x12\x11\n\tthreshold\x18\x04 \x01(\x02\x12\x32\n\tper_model\x18\x05 \x03(\x0b\x32\x1f.face.v1.Liveness.PerModelEntry\x1a/\n\rPerModelEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\"G\n\x08HeadPose\x12\x0b\n\x03yaw\x18\x01 \x01(\x02\x12\r\n\x05pitch\x18\x02 \x01(\x02\x12\x0c\n\x04roll\x18\x03 \x01(\x02\x12\x11\n\tavailable\x18\x04 \x01(\x08\"b\n\x08\x46\x61\x63\x65Info\x12\"\n\x04\x62\x62ox\x18\x01 \x01(\x0b\x32\x14.face.v1.BoundingBox\x12\x11\n\tdet_score\x18\x02 \x01(\x02\x12\x1f\n\x04pose\x18\x03 \x01(\x0b\x32\x11.face.v1.HeadPose\"1\n\x0cImageRequest\x12\r\n\x05image\x18\x01 \x01(\x0c\x12\x12\n\nrequest_id\x18\x02 \x01(\t\"Z\n\rEmbedResponse\x12\x11\n\tembedding\x18\x01 \x03(\x02\x12\x15\n\rembedding_dim\x18\x02 \x01(\x05\x12\x1f\n\x04\x66\x61\x63\x65\x18\x03 \x01(\x0b\x32\x11.face.v1.FaceInfo\"\x85\x01\n\x13VerifyFrameResponse\x12\x11\n\tembedding\x18\x01 \x03(\x02\x12\x15\n\rembedding_dim\x18\x02 \x01(\x05\x12\x1f\n\x04\x66\x61\x63\x65\x18\x03 \x01(\x0b\x32\x11.face.v1.FaceInfo\x12#\n\x08liveness\x18\x04 \x01(\x0b\x32\x11.face.v1.Liveness\"X\n\x10LivenessResponse\x12\x1f\n\x04\x66\x61\x63\x65\x18\x01 \x01(\x0b\x32\x11.face.v1.FaceInfo\x12#\n\x08liveness\x18\x02 \x01(\x0b\x32\x11.face.v1.Liveness\"f\n\x0c\x46rameRequest\x12\r\n\x05image\x18\x01 \x01(\x0c\x12\x10\n\x08\x66rame_id\x18\x02 \x01(\x04\x12!\n\x04mode\x18\x03 \x01(\x0e\x32\x13.face.v1.StreamMode\x12\x12\n\nrequest_id\x18\x04 \x01(\t\"\xd7\x01\n\rFrameResponse\x12\x10\n\x08\x66rame_id\x18\x01 \x01(\x04\x12\n\n\x02ok\x18\x02 \x01(\x08\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.face.v1.FaceError\x12\x1f\n\x04\x66\x61\x63\x65\x18\x04 \x01(\x0b\x32\x11.face.v1.FaceInfo\x12#\n\x08liveness\x18\x05 \x01(\x0b\x32\x11.face.v1.Liveness\x12\x11\n\tembedding\x18\x06 \x03(\x02\x12\x15\n\rembedding_dim\x18\x07 \x01(\x05\x12\x15\n\rprocessing_ms\x18\x08 \x01(\x05\"\x0f\n\rHealthRequest\"\x85\x02\n\x0eHealthResponse\x12\r\n\x05ready\x18\x01 \x01(\x08\x12\x0e\n\x06\x64\x65vice\x18\x02 \x01(\t\x12\x19\n\x11insightface_model\x18\x03 \x01(\t\x12\x15\n\rembedding_dim\x18\x04 \x01(\x05\x12\x18\n\x10liveness_enabled\x18\x05 \x01(\x08\x12\x17\n\x0fliveness_loaded\x18\x06 \x01(\x08\x12\x17\n\x0fliveness_models\x18\x07 \x03(\t\x12\x1a\n\x12liveness_threshold\x18\x08 \x01(\x02\x12\"\n\x1aliveness_require_unanimous\x18\t \x01(\x08\x12\x16\n\x0eliveness_error\x18\n \x01(\t*\xa3\x02\n\tErrorCode\x12\x1a\n\x16\x45RROR_CODE_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x45RROR_CODE_INVALID_IMAGE\x10\x01\x12\x1f\n\x1b\x45RROR_CODE_NO_FACE_DETECTED\x10\x02\x12\x1d\n\x19\x45RROR_CODE_MULTIPLE_FACES\x10\x03\x12\x1f\n\x1b\x45RROR_CODE_LOW_QUALITY_FACE\x10\x04\x12\x1d\n\x19\x45RROR_CODE_SPOOF_DETECTED\x10\x05\x12#\n\x1f\x45RROR_CODE_LIVENESS_UNAVAILABLE\x10\x06\x12\x1e\n\x1a\x45RROR_CODE_MODEL_NOT_READY\x10\x07\x12\x17\n\x13\x45RROR_CODE_INTERNAL\x10\x08*^\n\nStreamMode\x12\x1b\n\x17STREAM_MODE_UNSPECIFIED\x10\x00\x12\x1d\n\x19STREAM_MODE_LIVENESS_ONLY\x10\x01\x12\x14\n\x10STREAM_MODE_FULL\x10\x02\x32\xca\x02\n\x0b\x46\x61\x63\x65Service\x12\x36\n\x05\x45mbed\x12\x15.face.v1.ImageRequest\x1a\x16.face.v1.EmbedResponse\x12\x42\n\x0bVerifyFrame\x12\x15.face.v1.ImageRequest\x1a\x1c.face.v1.VerifyFrameResponse\x12\x41\n\rCheckLiveness\x12\x15.face.v1.ImageRequest\x1a\x19.face.v1.LivenessResponse\x12\x41\n\x0cStreamFrames\x12\x15.face.v1.FrameRequest\x1a\x16.face.v1.FrameResponse(\x01\x30\x01\x12\x39\n\x06Health\x12\x16.face.v1.HealthRequest\x1a\x17.face.v1.HealthResponseBOZMgithub.com/face_detecting_microservice/golang-backend/genproto/face/v1;facev1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12\x66\x61\x63\x65/v1/face.proto\x12\x07\x66\x61\x63\x65.v1\"\xc5\x01\n\tFaceError\x12 \n\x04\x63ode\x18\x01 \x01(\x0e\x32\x12.face.v1.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x30\n\x07\x64\x65tails\x18\x03 \x03(\x0b\x32\x1f.face.v1.FaceError.DetailsEntry\x12#\n\x08liveness\x18\x04 \x01(\x0b\x32\x11.face.v1.Liveness\x1a.\n\x0c\x44\x65tailsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"=\n\x0b\x42oundingBox\x12\n\n\x02x1\x18\x01 \x01(\x05\x12\n\n\x02y1\x18\x02 \x01(\x05\x12\n\n\x02x2\x18\x03 \x01(\x05\x12\n\n\x02y2\x18\x04 \x01(\x05\"\xc8\x01\n\x08Liveness\x12\x0f\n\x07is_real\x18\x01 \x01(\x08\x12\x18\n\x10real_probability\x18\x02 \x01(\x02\x12\x19\n\x11spoof_probability\x18\x03 \x01(\x02\x12\x11\n\tthreshold\x18\x04 \x01(\x02\x12\x32\n\tper_model\x18\x05 \x03(\x0b\x32\x1f.face.v1.Liveness.PerModelEntry\x1a/\n\rPerModelEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\"G\n\x08HeadPose\x12\x0b\n\x03yaw\x18\x01 \x01(\x02\x12\r\n\x05pitch\x18\x02 \x01(\x02\x12\x0c\n\x04roll\x18\x03 \x01(\x02\x12\x11\n\tavailable\x18\x04 \x01(\x08\"u\n\x08\x46\x61\x63\x65Info\x12\"\n\x04\x62\x62ox\x18\x01 \x01(\x0b\x32\x14.face.v1.BoundingBox\x12\x11\n\tdet_score\x18\x02 \x01(\x02\x12\x1f\n\x04pose\x18\x03 \x01(\x0b\x32\x11.face.v1.HeadPose\x12\x11\n\tlandmarks\x18\x04 \x03(\x02\"1\n\x0cImageRequest\x12\r\n\x05image\x18\x01 \x01(\x0c\x12\x12\n\nrequest_id\x18\x02 \x01(\t\"Z\n\rEmbedResponse\x12\x11\n\tembedding\x18\x01 \x03(\x02\x12\x15\n\rembedding_dim\x18\x02 \x01(\x05\x12\x1f\n\x04\x66\x61\x63\x65\x18\x03 \x01(\x0b\x32\x11.face.v1.FaceInfo\"\x85\x01\n\x13VerifyFrameResponse\x12\x11\n\tembedding\x18\x01 \x03(\x02\x12\x15\n\rembedding_dim\x18\x02 \x01(\x05\x12\x1f\n\x04\x66\x61\x63\x65\x18\x03 \x01(\x0b\x32\x11.face.v1.FaceInfo\x12#\n\x08liveness\x18\x04 \x01(\x0b\x32\x11.face.v1.Liveness\"X\n\x10LivenessResponse\x12\x1f\n\x04\x66\x61\x63\x65\x18\x01 \x01(\x0b\x32\x11.face.v1.FaceInfo\x12#\n\x08liveness\x18\x02 \x01(\x0b\x32\x11.face.v1.Liveness\"f\n\x0c\x46rameRequest\x12\r\n\x05image\x18\x01 \x01(\x0c\x12\x10\n\x08\x66rame_id\x18\x02 \x01(\x04\x12!\n\x04mode\x18\x03 \x01(\x0e\x32\x13.face.v1.StreamMode\x12\x12\n\nrequest_id\x18\x04 \x01(\t\"\xd7\x01\n\rFrameResponse\x12\x10\n\x08\x66rame_id\x18\x01 \x01(\x04\x12\n\n\x02ok\x18\x02 \x01(\x08\x12!\n\x05\x65rror\x18\x03 \x01(\x0b\x32\x12.face.v1.FaceError\x12\x1f\n\x04\x66\x61\x63\x65\x18\x04 \x01(\x0b\x32\x11.face.v1.FaceInfo\x12#\n\x08liveness\x18\x05 \x01(\x0b\x32\x11.face.v1.Liveness\x12\x11\n\tembedding\x18\x06 \x03(\x02\x12\x15\n\rembedding_dim\x18\x07 \x01(\x05\x12\x15\n\rprocessing_ms\x18\x08 \x01(\x05\"\x0f\n\rHealthRequest\"\x85\x02\n\x0eHealthResponse\x12\r\n\x05ready\x18\x01 \x01(\x08\x12\x0e\n\x06\x64\x65vice\x18\x02 \x01(\t\x12\x19\n\x11insightface_model\x18\x03 \x01(\t\x12\x15\n\rembedding_dim\x18\x04 \x01(\x05\x12\x18\n\x10liveness_enabled\x18\x05 \x01(\x08\x12\x17\n\x0fliveness_loaded\x18\x06 \x01(\x08\x12\x17\n\x0fliveness_models\x18\x07 \x03(\t\x12\x1a\n\x12liveness_threshold\x18\x08 \x01(\x02\x12\"\n\x1aliveness_require_unanimous\x18\t \x01(\x08\x12\x16\n\x0eliveness_error\x18\n \x01(\t*\xa3\x02\n\tErrorCode\x12\x1a\n\x16\x45RROR_CODE_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x45RROR_CODE_INVALID_IMAGE\x10\x01\x12\x1f\n\x1b\x45RROR_CODE_NO_FACE_DETECTED\x10\x02\x12\x1d\n\x19\x45RROR_CODE_MULTIPLE_FACES\x10\x03\x12\x1f\n\x1b\x45RROR_CODE_LOW_QUALITY_FACE\x10\x04\x12\x1d\n\x19\x45RROR_CODE_SPOOF_DETECTED\x10\x05\x12#\n\x1f\x45RROR_CODE_LIVENESS_UNAVAILABLE\x10\x06\x12\x1e\n\x1a\x45RROR_CODE_MODEL_NOT_READY\x10\x07\x12\x17\n\x13\x45RROR_CODE_INTERNAL\x10\x08*^\n\nStreamMode\x12\x1b\n\x17STREAM_MODE_UNSPECIFIED\x10\x00\x12\x1d\n\x19STREAM_MODE_LIVENESS_ONLY\x10\x01\x12\x14\n\x10STREAM_MODE_FULL\x10\x02\x32\xca\x02\n\x0b\x46\x61\x63\x65Service\x12\x36\n\x05\x45mbed\x12\x15.face.v1.ImageRequest\x1a\x16.face.v1.EmbedResponse\x12\x42\n\x0bVerifyFrame\x12\x15.face.v1.ImageRequest\x1a\x1c.face.v1.VerifyFrameResponse\x12\x41\n\rCheckLiveness\x12\x15.face.v1.ImageRequest\x1a\x19.face.v1.LivenessResponse\x12\x41\n\x0cStreamFrames\x12\x15.face.v1.FrameRequest\x1a\x16.face.v1.FrameResponse(\x01\x30\x01\x12\x39\n\x06Health\x12\x16.face.v1.HealthRequest\x1a\x17.face.v1.HealthResponseBOZMgithub.com/face_detecting_microservice/golang-backend/genproto/face/v1;facev1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,10 +36,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_FACEERROR_DETAILSENTRY']._serialized_options = b'8\001'
   _globals['_LIVENESS_PERMODELENTRY']._loaded_options = None
   _globals['_LIVENESS_PERMODELENTRY']._serialized_options = b'8\001'
-  _globals['_ERRORCODE']._serialized_start=1643
-  _globals['_ERRORCODE']._serialized_end=1934
-  _globals['_STREAMMODE']._serialized_start=1936
-  _globals['_STREAMMODE']._serialized_end=2030
+  _globals['_ERRORCODE']._serialized_start=1662
+  _globals['_ERRORCODE']._serialized_end=1953
+  _globals['_STREAMMODE']._serialized_start=1955
+  _globals['_STREAMMODE']._serialized_end=2049
   _globals['_FACEERROR']._serialized_start=32
   _globals['_FACEERROR']._serialized_end=229
   _globals['_FACEERROR_DETAILSENTRY']._serialized_start=183
@@ -53,23 +53,23 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_HEADPOSE']._serialized_start=497
   _globals['_HEADPOSE']._serialized_end=568
   _globals['_FACEINFO']._serialized_start=570
-  _globals['_FACEINFO']._serialized_end=668
-  _globals['_IMAGEREQUEST']._serialized_start=670
-  _globals['_IMAGEREQUEST']._serialized_end=719
-  _globals['_EMBEDRESPONSE']._serialized_start=721
-  _globals['_EMBEDRESPONSE']._serialized_end=811
-  _globals['_VERIFYFRAMERESPONSE']._serialized_start=814
-  _globals['_VERIFYFRAMERESPONSE']._serialized_end=947
-  _globals['_LIVENESSRESPONSE']._serialized_start=949
-  _globals['_LIVENESSRESPONSE']._serialized_end=1037
-  _globals['_FRAMEREQUEST']._serialized_start=1039
-  _globals['_FRAMEREQUEST']._serialized_end=1141
-  _globals['_FRAMERESPONSE']._serialized_start=1144
-  _globals['_FRAMERESPONSE']._serialized_end=1359
-  _globals['_HEALTHREQUEST']._serialized_start=1361
-  _globals['_HEALTHREQUEST']._serialized_end=1376
-  _globals['_HEALTHRESPONSE']._serialized_start=1379
-  _globals['_HEALTHRESPONSE']._serialized_end=1640
-  _globals['_FACESERVICE']._serialized_start=2033
-  _globals['_FACESERVICE']._serialized_end=2363
+  _globals['_FACEINFO']._serialized_end=687
+  _globals['_IMAGEREQUEST']._serialized_start=689
+  _globals['_IMAGEREQUEST']._serialized_end=738
+  _globals['_EMBEDRESPONSE']._serialized_start=740
+  _globals['_EMBEDRESPONSE']._serialized_end=830
+  _globals['_VERIFYFRAMERESPONSE']._serialized_start=833
+  _globals['_VERIFYFRAMERESPONSE']._serialized_end=966
+  _globals['_LIVENESSRESPONSE']._serialized_start=968
+  _globals['_LIVENESSRESPONSE']._serialized_end=1056
+  _globals['_FRAMEREQUEST']._serialized_start=1058
+  _globals['_FRAMEREQUEST']._serialized_end=1160
+  _globals['_FRAMERESPONSE']._serialized_start=1163
+  _globals['_FRAMERESPONSE']._serialized_end=1378
+  _globals['_HEALTHREQUEST']._serialized_start=1380
+  _globals['_HEALTHREQUEST']._serialized_end=1395
+  _globals['_HEALTHRESPONSE']._serialized_start=1398
+  _globals['_HEALTHRESPONSE']._serialized_end=1659
+  _globals['_FACESERVICE']._serialized_start=2052
+  _globals['_FACESERVICE']._serialized_end=2382
 # @@protoc_insertion_point(module_scope)

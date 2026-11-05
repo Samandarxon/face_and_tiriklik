@@ -82,6 +82,11 @@ message FaceInfo {
   // 3-maydon KEYIN qo'shilgan: protobuf'da yangi maydon qo'shish orqaga mos,
   // eski mijoz uni shunchaki e'tiborsiz qoldiradi.
   HeadPose pose = 3;
+  // Zich yuz nuqtalari (x0, y0, x1, y1, ... piksel): InsightFace 2d106det.
+  // Faqat oqimning FULL rejimida va LIVENESS_PASSIVE_FIRST yoqilganda
+  // to'ldiriladi — passiv tekshiruv ular orqali tekis yuzani (surat) ajratadi.
+  // Bo'sh bo'lsa passiv tekshiruv dalil yig'a olmaydi va challenge'ga o'tadi.
+  repeated float landmarks = 4;
 }
 
 // ================================================================== so'rovlar

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/face_detecting_microservice/golang-backend/internal/usecase"
 )
 
 // ConfirmThresholdGap — 1:1 chegarasi 1:N dan qancha past turadi.
@@ -144,6 +146,9 @@ type Config struct {
 	// tegishli bo'lishi uchun kosinus chegarasi (CHALLENGE_CONTINUITY_THRESHOLD).
 	// 0 — usecase.DefaultContinuityThreshold.
 	ChallengeContinuity float32
+
+	// PassiveLiveness — bir qarashda tekshiruv (LIVENESS_PASSIVE_*).
+	PassiveLiveness usecase.PassiveConfig
 }
 
 func Load() (*Config, error) {
@@ -204,6 +209,7 @@ func Load() (*Config, error) {
 		// Standart yoqiq: yozib olingan videoni faqat aktiv challenge to'sadi.
 		ActiveLivenessEnabled: envBool("ACTIVE_LIVENESS_ENABLED", true),
 		ChallengeContinuity:   float32(envFloat("CHALLENGE_CONTINUITY_THRESHOLD", 0)),
+		PassiveLiveness:       loadPassiveLiveness(),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -319,4 +325,17 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return v
 	}
 	return fallback
+}
+
+func loadPassiveLiveness() usecase.PassiveConfig {
+	c := usecase.DefaultPassiveConfig()
+	c.Enabled = envBool("LIVENESS_PASSIVE_FIRST", false)
+	c.MinFrames = envInt("LIVENESS_PASSIVE_MIN_FRAMES", c.MinFrames)
+	c.MinScore = envFloat("LIVENESS_PASSIVE_MIN_SCORE", c.MinScore)
+	c.Budget = time.Duration(envInt("LIVENESS_PASSIVE_BUDGET_MS", int(c.Budget/time.Millisecond))) * time.Millisecond
+	c.Planarity.MinMotion = envFloat("LIVENESS_PASSIVE_MIN_MOTION", c.Planarity.MinMotion)
+	c.Planarity.MinResidual = envFloat("LIVENESS_PASSIVE_MIN_RESIDUAL", c.Planarity.MinResidual)
+	c.Planarity.MinNonplanar = envFloat("LIVENESS_PASSIVE_MIN_NONPLANAR", c.Planarity.MinNonplanar)
+	c.Planarity.MaxEpipolar = envFloat("LIVENESS_PASSIVE_MAX_EPIPOLAR", c.Planarity.MaxEpipolar)
+	return c
 }
