@@ -85,3 +85,13 @@ def test_bitta_va_nol_yuz_ozgarmaydi():
     assert extract([only])[0].execute(IMAGE).bbox == only.bbox
     with pytest.raises(NoFaceDetectedError):
         extract([])[0].execute(IMAGE)
+
+
+def test_nisbat_bir_kamera_oldida_10_kishi_eng_yaqini_olinadi():
+    # Kiosk: kamera oldida o'nta odam — kameraga eng yaqini (eng katta yuz)
+    # olinadi, hatto keyingisi deyarli teng bo'lsa ham.
+    crowd = [face(100 + i, x=i * 300) for i in range(10)]
+    nearest = crowd[-1]
+    extractor, quality = extract(list(reversed(crowd)), ratio=1.0)
+    assert extractor.execute(IMAGE).bbox == nearest.bbox
+    assert quality.seen == [nearest.bbox]

@@ -78,16 +78,18 @@ class Container:
 
         self.embed_face = EmbedFace(extract)
         self.verify_frame = VerifyFrame(extract, liveness)
-        # Faqat jonli oqim: ro'yxatga olish va bir martalik so'rovlar qat'iy qoladi.
-        self.verify_stream_frame = VerifyFrame(
-            ExtractFace(
-                detector=self._detector,
-                quality=self._quality,
-                dominant_ratio=self.settings.stream_dominant_face_ratio,
-            ),
-            liveness,
+        # Kiosk/login: kamera oldida bir nechta odam bo'lsa ham kameraga ENG
+        # YAQIN (kadrdagi eng katta) yuz olinadi (STREAM_DOMINANT_FACE_RATIO).
+        # Ro'yxatga olish (embed_face) va 1:N verify_frame qat'iy qoladi.
+        nearest = ExtractFace(
+            detector=self._detector,
+            quality=self._quality,
+            dominant_ratio=self.settings.stream_dominant_face_ratio,
         )
-        self.probe_liveness = ProbeLiveness(extract, liveness)
+        self.verify_stream_frame = VerifyFrame(nearest, liveness)
+        # Passiv anti-spoof (tashqi provayder oldidan, /liveness/check) — ham
+        # eng yaqin yuz bo'yicha; bbox shu yuzniki (backend shu yuzni qirqib yuboradi).
+        self.probe_liveness = ProbeLiveness(nearest, liveness)
 
     def _load_liveness(self) -> None:
         try:
